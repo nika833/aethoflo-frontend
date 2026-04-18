@@ -63,7 +63,7 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
     const idx = -1; // use name as key
 
     try {
-      const { upload_url, s3_key, media_type } = await mediaApi.presign({
+      const { upload_url, s3_key, media_type, public_url } = await mediaApi.presign({
         filename: file.name,
         mime_type: file.type,
         module_skill_id: moduleId,
@@ -75,12 +75,11 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
         headers: { 'Content-Type': file.type },
       });
 
-      const s3Base = upload_url.split('?')[0];
       const registered = await mediaApi.register({
         module_skill_id: moduleId,
         media_type,
         title: file.name,
-        url: s3Base,
+        url: public_url || upload_url.split('?')[0],
         s3_key,
         file_size_bytes: file.size,
         mime_type: file.type,
