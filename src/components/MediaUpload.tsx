@@ -87,7 +87,7 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
 
       setFiles((f) => f.map((e) =>
         e.name === entry.name && e.status === 'uploading'
-          ? { ...e, status: 'done', id: registered.id, url: s3Base }
+          ? { ...e, status: 'done', id: registered.id, url: registered.url }
           : e
       ));
     } catch (err: unknown) {
