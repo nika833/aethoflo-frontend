@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { moduleSkillsApi, domainsApi, checklistsApi } from '../lib/api';
+import { moduleSkillsApi, domainsApi, checklistsApi, analyzeApi } from '../lib/api';
 import { SlideOver, EmptyState, PageHeader, Alert, Spinner, SimilarityWarning } from '../components/ui';
 import { MediaUpload } from '../components/MediaUpload';
 
@@ -16,9 +16,25 @@ interface ModuleSkill {
   media_count: number; checklist_count: number;
 }
 
+const AI_BADGE = (
+  <span style={{ fontSize: 10, fontWeight: 600, color: '#6D28D9', background: '#EDE9FE',
+    padding: '1px 6px', borderRadius: 4, marginLeft: 6, verticalAlign: 'middle' }}>
+    AI
+  </span>
+);
+
+const SMART_ACCEPT = [
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/x-m4a',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+].join(',');
+
 // ─── Module Editor form ───────────────────────────────────────────────────────
 function ModuleEditor({
   initial, domains: initialDomains, onSave, onCancel, saving, onDomainCreated, existingTitles,
+  onPendingChecklist,
 }: {
   initial?: Partial<ModuleSkill>;
   domains: Domain[];
@@ -27,6 +43,7 @@ function ModuleEditor({
   saving: boolean;
   onDomainCreated?: (d: Domain) => void;
   existingTitles: string[];
+  onPendingChecklist?: (items: string[]) => void;
 }) {
   const [form, setForm] = useState({
     title: initial?.title ?? '',
@@ -40,8 +57,16 @@ function ModuleEditor({
   const [creatingDomain, setCreatingDomain] = useState(false);
   const [newDomainName, setNewDomainName] = useState('');
   const [domainSaving, setDomainSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState('');
+  const [aiFields, setAiFields] = useState<Set<string>>(new Set());
+  const [smartDragging, setSmartDragging] = useState(false);
   const newDomainInputRef = useRef<HTMLInputElement>(null);
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const smartFileRef = useRef<HTMLInputElement>(null);
+  const set = (k: string, v: string) => {
+    setAiFields((prev) => { const n = new Set(prev); n.delete(k); return n; });
+    setForm((f) => ({ ...f, [k]: v }));
+  };
 
   const otherTitles = existingTitles.filter((t) => t !== initial?.title);
 
@@ -70,14 +95,102 @@ function ModuleEditor({
     }
   };
 
+  const runAnalysis = async (file: File) => {
+    setAnalyzeError('');
+    setAnalyzing(true);
+    try {
+      const s = await analyzeApi.smartFill(file);
+      setForm((f) => ({
+        title: s.title || f.title,
+        domain_id: f.domain_id,
+        objective: s.objective || f.objective,
+        why_it_matters: s.why_it_matters || f.why_it_matters,
+        context_note: s.context_note || f.context_note,
+        what_to_do: s.what_to_do || f.what_to_do,
+      }));
+      setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'what_to_do']));
+      if (s.checklist_items?.length) onPendingChecklist?.(s.checklist_items);
+
+      // Auto-suggest domain if no domain selected
+      if (!form.domain_id && s.domain_suggestion) {
+        const match = localDomains.find(
+          (d) => d.name.toLowerCase() === s.domain_suggestion!.toLowerCase()
+        );
+        if (match) setForm((f) => ({ ...f, domain_id: match.id }));
+      }
+    } catch (err: unknown) {
+      setAnalyzeError((err as Error).message ?? 'Analysis failed');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const isCreate = !initial?.id;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+      {/* Smart fill — only on create */}
+      {isCreate && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setSmartDragging(true); }}
+          onDragLeave={() => setSmartDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault(); setSmartDragging(false);
+            const f = e.dataTransfer.files[0];
+            if (f) runAnalysis(f);
+          }}
+          onClick={() => !analyzing && smartFileRef.current?.click()}
+          style={{
+            border: `2px dashed ${smartDragging ? '#7C3AED' : analyzing ? '#7C3AED' : '#C4B5FD'}`,
+            borderRadius: 'var(--radius-lg)',
+            padding: '18px 16px',
+            textAlign: 'center',
+            cursor: analyzing ? 'default' : 'pointer',
+            background: smartDragging ? '#EDE9FE' : analyzing ? '#F5F3FF' : '#FAFAFF',
+            transition: 'all 150ms',
+          }}
+        >
+          <input ref={smartFileRef} type="file" accept={SMART_ACCEPT} style={{ display: 'none' }}
+            onChange={(e) => { if (e.target.files?.[0]) runAnalysis(e.target.files[0]); }} />
+          {analyzing ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <Spinner size={18} />
+              <span style={{ fontSize: 14, color: '#5B21B6', fontWeight: 500 }}>
+                Analyzing content… this may take up to a minute for video
+              </span>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>✨</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#5B21B6', marginBottom: 2 }}>
+                Smart fill from file
+              </div>
+              <div style={{ fontSize: 12, color: '#7C3AED' }}>
+                Drop a video, audio, PDF, or doc — AI will pre-fill the form below
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {analyzeError && (
+        <div style={{ fontSize: 13, color: '#DC2626', background: '#FEF2F2',
+          borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+          {analyzeError}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-          <label className="form-label">Title <span style={{ color: 'var(--accent)' }}>*</span></label>
+          <label className="form-label">
+            Title <span style={{ color: 'var(--accent)' }}>*</span>
+            {aiFields.has('title') && AI_BADGE}
+          </label>
           <input className="form-input" value={form.title}
             onChange={(e) => set('title', e.target.value)}
-            placeholder="e.g. Introduction to DTT" autoFocus />
+            placeholder="e.g. Introduction to DTT"
+            autoFocus={!isCreate}
+            style={aiFields.has('title') ? { borderColor: '#A78BFA' } : {}} />
           <SimilarityWarning value={form.title} existing={otherTitles} />
         </div>
         <div className="form-group">
@@ -91,18 +204,14 @@ function ModuleEditor({
           {creatingDomain && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  ref={newDomainInputRef}
-                  className="form-input"
-                  style={{ flex: 1 }}
+                <input ref={newDomainInputRef} className="form-input" style={{ flex: 1 }}
                   value={newDomainName}
                   onChange={(e) => setNewDomainName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') confirmNewDomain();
                     if (e.key === 'Escape') { setCreatingDomain(false); setNewDomainName(''); }
                   }}
-                  placeholder="Domain name…"
-                />
+                  placeholder="Domain name…" />
                 <button className="btn btn-primary btn-sm" disabled={!newDomainName.trim() || domainSaving}
                   onClick={confirmNewDomain}>
                   {domainSaving ? <Spinner size={14} /> : 'Add'}
@@ -119,35 +228,47 @@ function ModuleEditor({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Objective</label>
+        <label className="form-label">
+          Objective {aiFields.has('objective') && AI_BADGE}
+        </label>
         <input className="form-input" value={form.objective}
           onChange={(e) => set('objective', e.target.value)}
-          placeholder="What learners will know or be able to do" />
+          placeholder="What learners will know or be able to do"
+          style={aiFields.has('objective') ? { borderColor: '#A78BFA' } : {}} />
       </div>
 
       <div className="form-group">
-        <label className="form-label">Why it matters</label>
+        <label className="form-label">
+          Why it matters {aiFields.has('why_it_matters') && AI_BADGE}
+        </label>
         <textarea className="form-textarea" value={form.why_it_matters}
           onChange={(e) => set('why_it_matters', e.target.value)}
-          placeholder="Explain the relevance and importance of this skill..." rows={3} />
+          placeholder="Explain the relevance and importance of this skill..." rows={3}
+          style={aiFields.has('why_it_matters') ? { borderColor: '#A78BFA' } : {}} />
       </div>
 
       <div className="form-group">
-        <label className="form-label">Context note for learner</label>
+        <label className="form-label">
+          Context note for learner {aiFields.has('context_note') && AI_BADGE}
+        </label>
         <textarea className="form-textarea" value={form.context_note}
           onChange={(e) => set('context_note', e.target.value)}
           placeholder="Optional: explain why this module appears at this moment."
-          rows={2} />
+          rows={2}
+          style={aiFields.has('context_note') ? { borderColor: '#A78BFA' } : {}} />
         <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
           Shown to the learner when this module is delivered. Leave blank to hide.
         </span>
       </div>
 
       <div className="form-group">
-        <label className="form-label">What to do</label>
+        <label className="form-label">
+          What to do {aiFields.has('what_to_do') && AI_BADGE}
+        </label>
         <textarea className="form-textarea" value={form.what_to_do}
           onChange={(e) => set('what_to_do', e.target.value)}
-          placeholder="Step-by-step instructions or action items..." rows={3} />
+          placeholder="Step-by-step instructions or action items..." rows={4}
+          style={aiFields.has('what_to_do') ? { borderColor: '#A78BFA' } : {}} />
       </div>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
@@ -169,13 +290,29 @@ function ModuleEditor({
 }
 
 // ─── Checklist sub-editor ────────────────────────────────────────────────────
-function ChecklistSection({ moduleId }: { moduleId: string }) {
+function ChecklistSection({ moduleId, autoItems }: { moduleId: string; autoItems?: string[] }) {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [newItemLabel, setNewItemLabel] = useState<Record<string, string>>({});
+  const autoCreated = useRef(false);
 
   useEffect(() => {
-    checklistsApi.listByModule(moduleId).then(setTemplates).finally(() => setLoading(false));
+    checklistsApi.listByModule(moduleId).then(async (loaded) => {
+      if (autoItems?.length && !autoCreated.current && loaded.length === 0) {
+        autoCreated.current = true;
+        try {
+          const t = await checklistsApi.createTemplate(moduleId, { title: 'Completion Checklist' });
+          const items = await Promise.all(
+            autoItems.map((label, i) =>
+              checklistsApi.addItem(t.id, { label, item_type: 'checkbox', is_required: true, display_order: i })
+            )
+          );
+          setTemplates([{ ...t, items }]);
+          return;
+        } catch {}
+      }
+      setTemplates(loaded);
+    }).finally(() => setLoading(false));
   }, [moduleId]);
 
   const createTemplate = async () => {
@@ -251,6 +388,7 @@ export default function AdminModules() {
   const [saving, setSaving] = useState(false);
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [pendingChecklist, setPendingChecklist] = useState<string[]>([]);
   const [panel, setPanel] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<ModuleSkill | null>(null);
   const [expandedChecklist, setExpandedChecklist] = useState<string | null>(null);
@@ -273,6 +411,7 @@ export default function AdminModules() {
       setModules((prev) => [...prev, created]);
       setEditing(created);
       setPanel('edit');
+      // pendingChecklist was set by SmartFill — ChecklistSection will consume it
     } catch { setError('Could not create module.'); }
     finally { setSaving(false); }
   };
@@ -412,7 +551,8 @@ export default function AdminModules() {
         <ModuleEditor domains={domains} onSave={handleCreate}
           onCancel={closePanel} saving={saving}
           existingTitles={moduleTitles}
-          onDomainCreated={(d) => setDomains((prev) => [...prev, d])} />
+          onDomainCreated={(d) => setDomains((prev) => [...prev, d])}
+          onPendingChecklist={setPendingChecklist} />
       </SlideOver>
 
       {/* Edit panel */}
@@ -431,6 +571,12 @@ export default function AdminModules() {
                 Attach videos, audio, recordings, PDFs, or Word docs learners will see with this module.
               </div>
               <MediaUpload moduleId={editing.id} />
+            </div>
+            <div style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 24 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 12 }}>
+                Completion checklist
+              </div>
+              <ChecklistSection moduleId={editing.id} autoItems={pendingChecklist.length ? pendingChecklist : undefined} />
             </div>
           </div>
         )}

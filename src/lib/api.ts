@@ -116,6 +116,29 @@ export const mediaApi = {
   delete: (id: string) => api.delete(`/media/${id}`),
 };
 
+export const analyzeApi = {
+  smartFill: async (file: File): Promise<{
+    title: string; objective: string; why_it_matters: string;
+    what_to_do: string; context_note: string | null;
+    checklist_items: string[]; domain_suggestion: string | null;
+  }> => {
+    const token = localStorage.getItem('aethoflo_token');
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/analyze`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error ?? 'Analysis failed');
+    }
+    const data = await res.json();
+    return data.suggestions;
+  },
+};
+
 export const exportsApi = {
   download: async (exportType: string) => {
     const response = await api.post('/exports/download', { export_type: exportType }, {
