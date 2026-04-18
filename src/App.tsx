@@ -6,7 +6,9 @@ import AppShell from './components/AppShell';
 import { RequireAuth } from './components/RequireAuth';
 
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
 import EmbeddedLaunchPage from './pages/EmbeddedLaunchPage';
+import NotificationSettings from './pages/NotificationSettings';
 
 import AdminDashboard from './pages/AdminDashboard';
 import AdminDomains from './pages/AdminDomains';
@@ -31,6 +33,7 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
         <Route path="/launch" element={<EmbeddedLaunchPage />} />
         <Route path="/" element={<RootRedirect />} />
 
@@ -53,6 +56,14 @@ export default function App() {
           <Route index element={<LearnerHomePage />} />
           <Route path="module/:roadmapModuleId" element={<LearnerModulePage />} />
           <Route path="progress" element={<LearnerProgressPage />} />
+          <Route path="settings" element={<NotificationSettings />} />
+        </Route>
+
+        {/* Admin notification settings */}
+        <Route path="/admin" element={
+          <RequireAuth role="admin"><AppShell /></RequireAuth>
+        }>
+          <Route path="settings" element={<NotificationSettings />} />
         </Route>
 
         {/* Fallback */}

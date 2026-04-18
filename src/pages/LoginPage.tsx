@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../lib/api';
 import { useAuthStore } from '../lib/authStore';
 import { Spinner, Alert } from '../components/ui';
@@ -111,8 +111,9 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 20 }}>
-          Learners: access via your organization's app
+        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', marginTop: 20 }}>
+          No account?{' '}
+          <Link to="/signup" style={{ color: 'var(--accent)', fontWeight: 500 }}>Create a free workspace</Link>
         </p>
       </div>
     </div>
