@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { roadmapsApi, moduleSkillsApi } from '../lib/api';
-import { Modal, EmptyState, PageHeader, Alert, Spinner } from '../components/ui';
+import { Modal, EmptyState, PageHeader, Alert, Spinner, SimilarityWarning } from '../components/ui';
 
 interface ModuleSkill { id: string; title: string; domain_name: string | null; }
 interface RoadmapModule {
@@ -246,12 +246,13 @@ function RoadmapBuilder({
 
 // ─── Roadmap form ─────────────────────────────────────────────────────────────
 function RoadmapForm({
-  initial, onSave, onCancel, saving,
+  initial, onSave, onCancel, saving, existingTitles,
 }: {
   initial?: Partial<Roadmap>;
   onSave: (d: Record<string, unknown>) => void;
   onCancel: () => void;
   saving: boolean;
+  existingTitles: string[];
 }) {
   const [form, setForm] = useState({
     title: initial?.title ?? '',
@@ -260,6 +261,7 @@ function RoadmapForm({
     duration_label: initial?.duration_label ?? '',
   });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const otherTitles = existingTitles.filter((t) => t !== initial?.title);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -267,6 +269,7 @@ function RoadmapForm({
         <label className="form-label">Title <span style={{ color: 'var(--accent)' }}>*</span></label>
         <input className="form-input" value={form.title} autoFocus
           onChange={(e) => set('title', e.target.value)} placeholder="e.g. New Staff Onboarding" />
+        <SimilarityWarning value={form.title} existing={otherTitles} />
       </div>
       <div className="form-group">
         <label className="form-label">Description</label>
@@ -396,13 +399,15 @@ export default function AdminRoadmaps() {
       )}
 
       <Modal isOpen={modal === 'create'} onClose={() => setModal(null)} title="New roadmap" width={520}>
-        <RoadmapForm onSave={handleCreate} onCancel={() => setModal(null)} saving={saving} />
+        <RoadmapForm onSave={handleCreate} onCancel={() => setModal(null)} saving={saving}
+          existingTitles={roadmaps.map((r) => r.title)} />
       </Modal>
       <Modal isOpen={modal === 'edit'} onClose={() => { setModal(null); setEditing(null); }}
         title="Edit roadmap" width={520}>
         {editing && (
           <RoadmapForm initial={editing} onSave={handleEdit}
-            onCancel={() => { setModal(null); setEditing(null); }} saving={saving} />
+            onCancel={() => { setModal(null); setEditing(null); }} saving={saving}
+            existingTitles={roadmaps.map((r) => r.title)} />
         )}
       </Modal>
     </div>

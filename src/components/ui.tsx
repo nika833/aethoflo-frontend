@@ -1,6 +1,11 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 
+// ─── Shared keyframes ─────────────────────────────────────────────────────────
+const ANIM_STYLES = `
+  @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+`;
+
 // ─── Spinner ─────────────────────────────────────────────────────────────────
 export function Spinner({ size = 20 }: { size?: number }) {
   return (
@@ -104,6 +109,71 @@ export function Modal({
       </div>
     </div>,
     document.body
+  );
+}
+
+// ─── Slide-over panel ─────────────────────────────────────────────────────────
+export function SlideOver({
+  isOpen, onClose, title, children,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  if (!isOpen) return null;
+  return createPortal(
+    <>
+      <style>{ANIM_STYLES}</style>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 900, display: 'flex', justifyContent: 'flex-end',
+        pointerEvents: 'none' }}>
+        <div onClick={onClose}
+          style={{ position: 'absolute', inset: 0, background: 'rgba(28,25,23,0.18)',
+            pointerEvents: 'all' }} />
+        <div style={{
+          position: 'relative', width: 600, maxWidth: '94vw', height: '100%',
+          background: 'var(--surface)',
+          borderLeft: '1px solid var(--border)',
+          boxShadow: '-12px 0 40px rgba(0,0,0,0.14)',
+          display: 'flex', flexDirection: 'column',
+          animation: 'slideInRight 220ms cubic-bezier(.16,1,.3,1) both',
+          pointerEvents: 'all',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '20px 24px', borderBottom: '1px solid var(--border-light)', flexShrink: 0 }}>
+            <h4 style={{ color: 'var(--text-primary)' }}>{title}</h4>
+            <button className="btn btn-ghost btn-icon" onClick={onClose}
+              style={{ color: 'var(--text-tertiary)' }}>✕</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+            {children}
+          </div>
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+}
+
+// ─── Similarity warning dropdown ──────────────────────────────────────────────
+export function SimilarityWarning({ value, existing }: { value: string; existing: string[] }) {
+  if (!value || value.trim().length < 2) return null;
+  const lower = value.toLowerCase();
+  const matches = existing.filter((t) => t.toLowerCase().includes(lower));
+  if (matches.length === 0) return null;
+  return (
+    <div style={{ marginTop: 4, border: '1px solid #FCD34D', borderRadius: 'var(--radius-md)',
+      overflow: 'hidden', background: '#FFFBEB' }}>
+      <div style={{ padding: '5px 10px', fontSize: 11, color: '#92400E', fontWeight: 600 }}>
+        ⚠ Similar names already exist:
+      </div>
+      {matches.slice(0, 5).map((t) => (
+        <div key={t} style={{ padding: '4px 10px 4px 16px', fontSize: 12, color: '#78350F',
+          borderTop: '1px solid #FDE68A' }}>
+          · {t}
+        </div>
+      ))}
+    </div>
   );
 }
 

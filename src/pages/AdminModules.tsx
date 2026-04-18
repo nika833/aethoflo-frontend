@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { moduleSkillsApi, domainsApi, checklistsApi } from '../lib/api';
-import { Modal, EmptyState, PageHeader, Alert, Spinner, StatusBadge } from '../components/ui';
+import { SlideOver, EmptyState, PageHeader, Alert, Spinner, SimilarityWarning } from '../components/ui';
 import { MediaUpload } from '../components/MediaUpload';
 
 interface Domain { id: string; name: string; }
@@ -18,7 +18,7 @@ interface ModuleSkill {
 
 // ─── Module Editor form ───────────────────────────────────────────────────────
 function ModuleEditor({
-  initial, domains: initialDomains, onSave, onCancel, saving, onDomainCreated,
+  initial, domains: initialDomains, onSave, onCancel, saving, onDomainCreated, existingTitles,
 }: {
   initial?: Partial<ModuleSkill>;
   domains: Domain[];
@@ -26,6 +26,7 @@ function ModuleEditor({
   onCancel: () => void;
   saving: boolean;
   onDomainCreated?: (d: Domain) => void;
+  existingTitles: string[];
 }) {
   const [form, setForm] = useState({
     title: initial?.title ?? '',
@@ -41,6 +42,8 @@ function ModuleEditor({
   const [domainSaving, setDomainSaving] = useState(false);
   const newDomainInputRef = useRef<HTMLInputElement>(null);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const otherTitles = existingTitles.filter((t) => t !== initial?.title);
 
   const handleDomainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (e.target.value === '__new__') {
@@ -75,6 +78,7 @@ function ModuleEditor({
           <input className="form-input" value={form.title}
             onChange={(e) => set('title', e.target.value)}
             placeholder="e.g. Introduction to DTT" autoFocus />
+          <SimilarityWarning value={form.title} existing={otherTitles} />
         </div>
         <div className="form-group">
           <label className="form-label">Domain</label>
@@ -85,24 +89,30 @@ function ModuleEditor({
             <option value="__new__">+ Create new domain…</option>
           </select>
           {creatingDomain && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input
-                ref={newDomainInputRef}
-                className="form-input"
-                style={{ flex: 1 }}
-                value={newDomainName}
-                onChange={(e) => setNewDomainName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') confirmNewDomain(); if (e.key === 'Escape') { setCreatingDomain(false); setNewDomainName(''); } }}
-                placeholder="Domain name…"
-              />
-              <button className="btn btn-primary btn-sm" disabled={!newDomainName.trim() || domainSaving}
-                onClick={confirmNewDomain}>
-                {domainSaving ? <Spinner size={14} /> : 'Add'}
-              </button>
-              <button className="btn btn-secondary btn-sm"
-                onClick={() => { setCreatingDomain(false); setNewDomainName(''); }}>
-                Cancel
-              </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  ref={newDomainInputRef}
+                  className="form-input"
+                  style={{ flex: 1 }}
+                  value={newDomainName}
+                  onChange={(e) => setNewDomainName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') confirmNewDomain();
+                    if (e.key === 'Escape') { setCreatingDomain(false); setNewDomainName(''); }
+                  }}
+                  placeholder="Domain name…"
+                />
+                <button className="btn btn-primary btn-sm" disabled={!newDomainName.trim() || domainSaving}
+                  onClick={confirmNewDomain}>
+                  {domainSaving ? <Spinner size={14} /> : 'Add'}
+                </button>
+                <button className="btn btn-secondary btn-sm"
+                  onClick={() => { setCreatingDomain(false); setNewDomainName(''); }}>
+                  Cancel
+                </button>
+              </div>
+              <SimilarityWarning value={newDomainName} existing={localDomains.map((d) => d.name)} />
             </div>
           )}
         </div>
@@ -122,7 +132,6 @@ function ModuleEditor({
           placeholder="Explain the relevance and importance of this skill..." rows={3} />
       </div>
 
-      {/* context_note — exact label and placeholder per spec */}
       <div className="form-group">
         <label className="form-label">Context note for learner</label>
         <textarea className="form-textarea" value={form.context_note}
@@ -177,8 +186,12 @@ function ChecklistSection({ moduleId }: { moduleId: string }) {
   const addItem = async (templateId: string) => {
     const label = newItemLabel[templateId]?.trim();
     if (!label) return;
-    const item = await checklistsApi.addItem(templateId, { label, item_type: 'checkbox', is_required: true, display_order: templates.find(t => t.id === templateId)?.items.length ?? 0 });
-    setTemplates((prev) => prev.map((t) => t.id === templateId ? { ...t, items: [...(t.items || []), item] } : t));
+    const item = await checklistsApi.addItem(templateId, {
+      label, item_type: 'checkbox', is_required: true,
+      display_order: templates.find((t) => t.id === templateId)?.items.length ?? 0,
+    });
+    setTemplates((prev) => prev.map((t) =>
+      t.id === templateId ? { ...t, items: [...(t.items || []), item] } : t));
     setNewItemLabel((p) => ({ ...p, [templateId]: '' }));
   };
 
@@ -236,8 +249,9 @@ export default function AdminModules() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState<'create' | 'edit' | null>(null);
+  const [panel, setPanel] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<ModuleSkill | null>(null);
   const [expandedChecklist, setExpandedChecklist] = useState<string | null>(null);
   const [filterDomain, setFilterDomain] = useState('');
@@ -250,14 +264,15 @@ export default function AdminModules() {
 
   useEffect(() => { load(); }, [filterDomain]);
 
+  const closePanel = () => { setPanel(null); setEditing(null); };
+
   const handleCreate = async (d: Record<string, unknown>) => {
     setSaving(true); setError('');
     try {
       const created = await moduleSkillsApi.create(d);
       setModules((prev) => [...prev, created]);
-      // Switch straight to edit so user can add media files
       setEditing(created);
-      setModal('edit');
+      setPanel('edit');
     } catch { setError('Could not create module.'); }
     finally { setSaving(false); }
   };
@@ -268,9 +283,27 @@ export default function AdminModules() {
     try {
       const updated = await moduleSkillsApi.update(editing.id, d);
       setModules((prev) => prev.map((m) => m.id === editing.id ? { ...m, ...updated } : m));
-      setModal(null); setEditing(null);
+      closePanel();
     } catch { setError('Could not update module.'); }
     finally { setSaving(false); }
+  };
+
+  const handleDuplicate = async (mod: ModuleSkill) => {
+    setDuplicating(mod.id);
+    try {
+      const created = await moduleSkillsApi.create({
+        title: `Copy of ${mod.title}`,
+        domain_id: mod.domain_id,
+        objective: mod.objective,
+        why_it_matters: mod.why_it_matters,
+        context_note: mod.context_note,
+        what_to_do: mod.what_to_do,
+      });
+      setModules((prev) => [...prev, created]);
+      setEditing(created);
+      setPanel('edit');
+    } catch { setError('Could not duplicate module.'); }
+    finally { setDuplicating(null); }
   };
 
   const handleDelete = async (id: string) => {
@@ -281,6 +314,8 @@ export default function AdminModules() {
     } catch { setError('Could not delete module.'); }
   };
 
+  const moduleTitles = modules.map((m) => m.title);
+
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={28} /></div>;
 
   return (
@@ -289,7 +324,7 @@ export default function AdminModules() {
         title="Module Library"
         subtitle="Reusable training skills grouped by domain"
         action={
-          <button className="btn btn-primary" onClick={() => setModal('create')}>
+          <button className="btn btn-primary" onClick={() => setPanel('create')}>
             + New module
           </button>
         }
@@ -313,13 +348,12 @@ export default function AdminModules() {
       {modules.length === 0 ? (
         <EmptyState icon="⊟" title="No modules yet"
           description="Create reusable module skills to add to your roadmaps."
-          action={<button className="btn btn-primary" onClick={() => setModal('create')}>Create first module</button>}
+          action={<button className="btn btn-primary" onClick={() => setPanel('create')}>Create first module</button>}
         />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {modules.map((mod) => (
             <div key={mod.id} className="card" style={{ overflow: 'hidden' }}>
-              {/* Module row */}
               <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)',
@@ -339,23 +373,28 @@ export default function AdminModules() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                    {mod.checklist_count > 0 && `✓ Checklist`}
-                  </span>
+                  {mod.checklist_count > 0 && (
+                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>✓ Checklist</span>
+                  )}
                   <button className="btn btn-secondary btn-sm"
                     onClick={() => setExpandedChecklist(expandedChecklist === mod.id ? null : mod.id)}>
                     {expandedChecklist === mod.id ? 'Close' : 'Checklist'}
                   </button>
                   <button className="btn btn-secondary btn-sm"
-                    onClick={() => { setEditing(mod); setModal('edit'); }}>Edit</button>
+                    disabled={duplicating === mod.id}
+                    onClick={() => handleDuplicate(mod)}
+                    title="Duplicate this module">
+                    {duplicating === mod.id ? <Spinner size={12} /> : '⎘ Duplicate'}
+                  </button>
+                  <button className="btn btn-secondary btn-sm"
+                    onClick={() => { setEditing(mod); setPanel('edit'); }}>Edit</button>
                   <button className="btn btn-danger btn-sm" onClick={() => handleDelete(mod.id)}>Archive</button>
                 </div>
               </div>
 
-              {/* Inline checklist editor */}
               {expandedChecklist === mod.id && (
-                <div style={{ padding: '0 20px 20px',
-                  borderTop: '1px solid var(--border-light)', paddingTop: 16 }}>
+                <div style={{ padding: '16px 20px 20px',
+                  borderTop: '1px solid var(--border-light)' }}>
                   <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)',
                     letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
                     Checklist items
@@ -368,19 +407,21 @@ export default function AdminModules() {
         </div>
       )}
 
-      <Modal isOpen={modal === 'create'} onClose={() => setModal(null)}
-        title="New module skill" width={600}>
+      {/* Create panel */}
+      <SlideOver isOpen={panel === 'create'} onClose={closePanel} title="New module skill">
         <ModuleEditor domains={domains} onSave={handleCreate}
-          onCancel={() => setModal(null)} saving={saving}
+          onCancel={closePanel} saving={saving}
+          existingTitles={moduleTitles}
           onDomainCreated={(d) => setDomains((prev) => [...prev, d])} />
-      </Modal>
+      </SlideOver>
 
-      <Modal isOpen={modal === 'edit'} onClose={() => { setModal(null); setEditing(null); }}
-        title="Edit module skill" width={640}>
+      {/* Edit panel */}
+      <SlideOver isOpen={panel === 'edit'} onClose={closePanel} title="Edit module skill">
         {editing && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             <ModuleEditor initial={editing} domains={domains} onSave={handleEdit}
-              onCancel={() => { setModal(null); setEditing(null); }} saving={saving}
+              onCancel={closePanel} saving={saving}
+              existingTitles={moduleTitles}
               onDomainCreated={(d) => setDomains((prev) => [...prev, d])} />
             <div style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 24 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
@@ -393,7 +434,7 @@ export default function AdminModules() {
             </div>
           </div>
         )}
-      </Modal>
+      </SlideOver>
     </div>
   );
 }
