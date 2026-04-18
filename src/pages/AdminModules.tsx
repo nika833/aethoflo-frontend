@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { moduleSkillsApi, domainsApi, checklistsApi } from '../lib/api';
 import { Modal, EmptyState, PageHeader, Alert, Spinner, StatusBadge } from '../components/ui';
+import { MediaUpload } from '../components/MediaUpload';
 
 interface Domain { id: string; name: string; }
 interface ChecklistItem {
@@ -201,7 +202,9 @@ export default function AdminModules() {
     try {
       const created = await moduleSkillsApi.create(d);
       setModules((prev) => [...prev, created]);
-      setModal(null);
+      // Switch straight to edit so user can add media files
+      setEditing(created);
+      setModal('edit');
     } catch { setError('Could not create module.'); }
     finally { setSaving(false); }
   };
@@ -319,10 +322,21 @@ export default function AdminModules() {
       </Modal>
 
       <Modal isOpen={modal === 'edit'} onClose={() => { setModal(null); setEditing(null); }}
-        title="Edit module skill" width={600}>
+        title="Edit module skill" width={640}>
         {editing && (
-          <ModuleEditor initial={editing} domains={domains} onSave={handleEdit}
-            onCancel={() => { setModal(null); setEditing(null); }} saving={saving} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            <ModuleEditor initial={editing} domains={domains} onSave={handleEdit}
+              onCancel={() => { setModal(null); setEditing(null); }} saving={saving} />
+            <div style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 24 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
+                Media files
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 14 }}>
+                Attach videos, audio, recordings, PDFs, or Word docs learners will see with this module.
+              </div>
+              <MediaUpload moduleId={editing.id} />
+            </div>
+          </div>
         )}
       </Modal>
     </div>
