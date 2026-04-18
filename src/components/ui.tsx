@@ -65,19 +65,24 @@ export function Modal({
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 100,
-        background: 'rgba(28,25,23,0.4)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 16,
+        background: 'rgba(28,25,23,0.45)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        overflowY: 'auto',
+        padding: '40px 16px',
         animation: 'fadeIn 150ms var(--ease-out) both',
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="card"
         style={{
           width: '100%', maxWidth: width,
-          maxHeight: '90vh', overflowY: 'auto',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-lg)',
+          flexShrink: 0,
           animation: 'fadeUp 220ms var(--ease-out) both',
         }}
       >
