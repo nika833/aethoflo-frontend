@@ -103,7 +103,7 @@ export default function AppShell() {
         }}>
           {!collapsed && (
             <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', truncate: 'ellipsis' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.display_name}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
