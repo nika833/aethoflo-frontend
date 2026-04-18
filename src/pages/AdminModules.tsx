@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { moduleSkillsApi, domainsApi, checklistsApi } from '../lib/api';
 import { Modal, EmptyState, PageHeader, Alert, Spinner, StatusBadge } from '../components/ui';
 import { MediaUpload } from '../components/MediaUpload';
@@ -18,13 +18,14 @@ interface ModuleSkill {
 
 // ─── Module Editor form ───────────────────────────────────────────────────────
 function ModuleEditor({
-  initial, domains, onSave, onCancel, saving,
+  initial, domains: initialDomains, onSave, onCancel, saving, onDomainCreated,
 }: {
   initial?: Partial<ModuleSkill>;
   domains: Domain[];
   onSave: (d: Record<string, unknown>) => void;
   onCancel: () => void;
   saving: boolean;
+  onDomainCreated?: (d: Domain) => void;
 }) {
   const [form, setForm] = useState({
     title: initial?.title ?? '',
@@ -34,7 +35,37 @@ function ModuleEditor({
     context_note: initial?.context_note ?? '',
     what_to_do: initial?.what_to_do ?? '',
   });
+  const [localDomains, setLocalDomains] = useState<Domain[]>(initialDomains);
+  const [creatingDomain, setCreatingDomain] = useState(false);
+  const [newDomainName, setNewDomainName] = useState('');
+  const [domainSaving, setDomainSaving] = useState(false);
+  const newDomainInputRef = useRef<HTMLInputElement>(null);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleDomainChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (e.target.value === '__new__') {
+      setCreatingDomain(true);
+      setTimeout(() => newDomainInputRef.current?.focus(), 50);
+    } else {
+      set('domain_id', e.target.value);
+    }
+  };
+
+  const confirmNewDomain = async () => {
+    const name = newDomainName.trim();
+    if (!name) return;
+    setDomainSaving(true);
+    try {
+      const created: Domain = await domainsApi.create({ name });
+      setLocalDomains((prev) => [...prev, created]);
+      setForm((f) => ({ ...f, domain_id: created.id }));
+      onDomainCreated?.(created);
+    } finally {
+      setDomainSaving(false);
+      setCreatingDomain(false);
+      setNewDomainName('');
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -48,10 +79,32 @@ function ModuleEditor({
         <div className="form-group">
           <label className="form-label">Domain</label>
           <select className="form-select form-input" value={form.domain_id}
-            onChange={(e) => set('domain_id', e.target.value)}>
+            onChange={handleDomainChange}>
             <option value="">— No domain —</option>
-            {domains.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {localDomains.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            <option value="__new__">+ Create new domain…</option>
           </select>
+          {creatingDomain && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input
+                ref={newDomainInputRef}
+                className="form-input"
+                style={{ flex: 1 }}
+                value={newDomainName}
+                onChange={(e) => setNewDomainName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmNewDomain(); if (e.key === 'Escape') { setCreatingDomain(false); setNewDomainName(''); } }}
+                placeholder="Domain name…"
+              />
+              <button className="btn btn-primary btn-sm" disabled={!newDomainName.trim() || domainSaving}
+                onClick={confirmNewDomain}>
+                {domainSaving ? <Spinner size={14} /> : 'Add'}
+              </button>
+              <button className="btn btn-secondary btn-sm"
+                onClick={() => { setCreatingDomain(false); setNewDomainName(''); }}>
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -318,7 +371,8 @@ export default function AdminModules() {
       <Modal isOpen={modal === 'create'} onClose={() => setModal(null)}
         title="New module skill" width={600}>
         <ModuleEditor domains={domains} onSave={handleCreate}
-          onCancel={() => setModal(null)} saving={saving} />
+          onCancel={() => setModal(null)} saving={saving}
+          onDomainCreated={(d) => setDomains((prev) => [...prev, d])} />
       </Modal>
 
       <Modal isOpen={modal === 'edit'} onClose={() => { setModal(null); setEditing(null); }}
@@ -326,7 +380,8 @@ export default function AdminModules() {
         {editing && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             <ModuleEditor initial={editing} domains={domains} onSave={handleEdit}
-              onCancel={() => { setModal(null); setEditing(null); }} saving={saving} />
+              onCancel={() => { setModal(null); setEditing(null); }} saving={saving}
+              onDomainCreated={(d) => setDomains((prev) => [...prev, d])} />
             <div style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 24 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
                 Media files
