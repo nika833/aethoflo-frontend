@@ -146,8 +146,18 @@ export const analyzeApi = {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 80));
       };
-      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`)));
-      xhr.onerror = () => reject(new Error('Upload failed'));
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          console.error('[smart-fill] R2 upload failed', xhr.status, xhr.responseText);
+          reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText || 'no response body'}`));
+        }
+      };
+      xhr.onerror = () => {
+        console.error('[smart-fill] R2 upload network error — likely CORS');
+        reject(new Error('Upload blocked — check R2 CORS policy allows PUT from this origin'));
+      };
       xhr.send(file);
     });
 
