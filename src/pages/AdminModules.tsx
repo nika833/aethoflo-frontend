@@ -94,11 +94,9 @@ function ModuleEditor({
 
   const set = (k: string, v: string) => {
     setAiFields((prev) => { const n = new Set(prev); n.delete(k); return n; });
-    setForm((f) => {
-      const next = { ...f, [k]: v };
-      persistDraft(next, steps);
-      return next;
-    });
+    const next = { ...form, [k]: v };
+    setForm(next);
+    persistDraft(next, steps);
   };
 
   const setStepsAndSave = (newSteps: string[]) => {
@@ -139,19 +137,18 @@ function ModuleEditor({
     setAnalyzing(true);
     try {
       const { suggestions: s, pendingMedia } = await analyzeApi.smartFill(file, setAnalyzeProgress);
-      setForm((f) => {
-        const next = {
-          title: s.title || f.title,
-          domain_id: f.domain_id,
-          objective: s.objective || f.objective,
-          why_it_matters: s.why_it_matters || f.why_it_matters,
-          context_note: s.context_note || f.context_note,
-        };
-        persistDraft(next, s.checklist_items?.length ? s.checklist_items : steps);
-        return next;
-      });
-      setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'steps']));
+      const aiSteps = s.checklist_items?.length ? s.checklist_items : steps;
+      const nextForm = {
+        title: s.title || form.title,
+        domain_id: form.domain_id,
+        objective: s.objective || form.objective,
+        why_it_matters: s.why_it_matters || form.why_it_matters,
+        context_note: s.context_note || form.context_note,
+      };
+      setForm(nextForm);
       if (s.checklist_items?.length) setSteps(s.checklist_items);
+      setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'steps']));
+      persistDraft(nextForm, aiSteps);
       if (pendingMedia) onPendingMedia?.(pendingMedia);
 
       // Auto-suggest domain if no domain selected
@@ -521,9 +518,7 @@ export default function AdminModules() {
         setPendingSmartMedia(null);
         analyzeApi.registerMedia(pm.key, created.id, pm.originalName, pm.mimeType).catch(() => {});
       }
-      setJustCreated(true);
-      setEditing(created);
-      setPanel('edit');
+      closePanel();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
         ?? (err as Error)?.message ?? 'Could not create module.';
