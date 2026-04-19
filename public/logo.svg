@@ -1,8 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40">
-  <!-- Icon: overlapping circles -->
-  <circle cx="16" cy="20" r="13" fill="#1A1311"/>
-  <circle cx="27" cy="20" r="13" fill="#C96B47" opacity="0.92"/>
-  <!-- Wordmark -->
-  <text x="48" y="26" font-family="Georgia, 'Times New Roman', serif" font-size="20" font-weight="400" fill="#1A1311">aetho</text>
-  <text x="101" y="26" font-family="Georgia, 'Times New Roman', serif" font-size="20" font-weight="400" fill="#C96B47">flo</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100" width="240" height="100">
+  <title>aethoflo</title>
+  <desc>aethoflo logo — B3 mark + wordmark</desc>
+
+  
+  
+  <circle cx="74" cy="46" r="32" fill="#E87A4E"></circle>
+  
+  <circle cx="42" cy="60" r="20" fill="#2A1810"></circle>
+  
+  <clipPath id="logo-clip">
+    <circle cx="42" cy="60" r="20"></circle>
+  </clipPath>
+  <g clip-path="url(#logo-clip)">
+    <circle cx="74" cy="46" r="32" fill="#FAF5EF"></circle>
+  </g>
+
+  
+  
+  <text x="118" y="64" font-family="&#39;Source Serif 4&#39;, &#39;Iowan Old Style&#39;, Georgia, serif" font-size="38" font-weight="400" letter-spacing="-0.02em" fill="#2A1810">aetho</text>
+  
+  <text x="192" y="64" font-family="&#39;Source Serif 4&#39;, &#39;Iowan Old Style&#39;, Georgia, serif" font-size="38" font-weight="400" font-style="italic" letter-spacing="-0.02em" fill="#E87A4E">flo</text>
 </svg>

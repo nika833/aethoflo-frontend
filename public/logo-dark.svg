@@ -1,8 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40">
-  <!-- Icon: overlapping circles — dark circle uses white so it shows on dark bg -->
-  <circle cx="16" cy="20" r="13" fill="rgba(255,255,255,0.15)"/>
-  <circle cx="27" cy="20" r="13" fill="#C96B47" opacity="0.92"/>
-  <!-- Wordmark — "aetho" in white, "flo" in terracotta -->
-  <text x="48" y="26" font-family="Georgia, 'Times New Roman', serif" font-size="20" font-weight="400" fill="rgba(255,255,255,0.9)">aetho</text>
-  <text x="101" y="26" font-family="Georgia, 'Times New Roman', serif" font-size="20" font-weight="400" fill="#C96B47">flo</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100" width="240" height="100">
+  <title>aethoflo</title>
+  <!-- Mark: same as logo but cream intersection shows on dark bg -->
+  <circle cx="74" cy="46" r="32" fill="#E87A4E"/>
+  <circle cx="42" cy="60" r="20" fill="#2A1810"/>
+  <clipPath id="logo-dark-clip">
+    <circle cx="42" cy="60" r="20"/>
+  </clipPath>
+  <g clip-path="url(#logo-dark-clip)">
+    <circle cx="74" cy="46" r="32" fill="#FAF5EF"/>
+  </g>
+  <!-- Wordmark: white "aetho", orange italic "flo" -->
+  <text x="118" y="64" font-family="'Source Serif 4', 'Iowan Old Style', Georgia, serif" font-size="38" font-weight="400" letter-spacing="-0.02em" fill="rgba(255,255,255,0.9)">aetho</text>
+  <text x="192" y="64" font-family="'Source Serif 4', 'Iowan Old Style', Georgia, serif" font-size="38" font-weight="400" font-style="italic" letter-spacing="-0.02em" fill="#E87A4E">flo</text>
 </svg>
