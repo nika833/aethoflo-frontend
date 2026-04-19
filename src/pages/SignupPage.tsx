@@ -10,7 +10,7 @@ export default function SignupPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuthStore();
+  const { setAuth } = useAuthStore();
   const navigate = useNavigate();
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -33,7 +33,7 @@ export default function SignupPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Signup failed');
-      login(data.token, data.user);
+      setAuth(data.user, data.token);
       navigate('/admin');
     } catch (err: unknown) {
       setError((err as Error).message);

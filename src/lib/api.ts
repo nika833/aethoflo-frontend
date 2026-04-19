@@ -117,24 +117,54 @@ export const mediaApi = {
 };
 
 export const analyzeApi = {
-  smartFill: async (file: File): Promise<{
+  smartFill: async (file: File, onProgress?: (pct: number) => void): Promise<{
     title: string; objective: string; why_it_matters: string;
     what_to_do: string; context_note: string | null;
     checklist_items: string[]; domain_suggestion: string | null;
   }> => {
+    const base = import.meta.env.VITE_API_URL ?? '';
     const token = localStorage.getItem('aethoflo_token');
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/analyze`, {
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+    // Step 1: get presigned PUT URL from backend
+    const presignRes = await fetch(`${base}/api/analyze/presign`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData,
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ filename: file.name, mime_type: file.type }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error ?? 'Analysis failed');
+    if (!presignRes.ok) {
+      const e = await presignRes.json().catch(() => ({}));
+      throw new Error(e.error ?? 'Could not get upload URL');
     }
-    const data = await res.json();
+    const { url, key } = await presignRes.json() as { url: string; key: string };
+
+    // Step 2: upload directly to R2 (bypasses Railway gateway limit)
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', url);
+      xhr.setRequestHeader('Content-Type', file.type);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 80));
+      };
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`)));
+      xhr.onerror = () => reject(new Error('Upload failed'));
+      xhr.send(file);
+    });
+
+    onProgress?.(85);
+
+    // Step 3: tell backend to process the uploaded file
+    const analyzeRes = await fetch(`${base}/api/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ key, originalName: file.name, mimeType: file.type }),
+    });
+    if (!analyzeRes.ok) {
+      const e = await analyzeRes.json().catch(() => ({}));
+      throw new Error(e.error ?? 'Analysis failed');
+    }
+    onProgress?.(100);
+    const data = await analyzeRes.json();
     return data.suggestions;
   },
 };

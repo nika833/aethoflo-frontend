@@ -58,6 +58,7 @@ function ModuleEditor({
   const [newDomainName, setNewDomainName] = useState('');
   const [domainSaving, setDomainSaving] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [analyzeError, setAnalyzeError] = useState('');
   const [aiFields, setAiFields] = useState<Set<string>>(new Set());
   const [smartDragging, setSmartDragging] = useState(false);
@@ -95,17 +96,12 @@ function ModuleEditor({
     }
   };
 
-  const MAX_SMART_BYTES = 24 * 1024 * 1024; // 24 MB — Railway gateway hard limit is 25 MB
-
   const runAnalysis = async (file: File) => {
     setAnalyzeError('');
-    if (file.size > MAX_SMART_BYTES) {
-      setAnalyzeError(`File too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Please upload a file under 24 MB. For long videos, try trimming or exporting audio only.`);
-      return;
-    }
+    setAnalyzeProgress(0);
     setAnalyzing(true);
     try {
-      const s = await analyzeApi.smartFill(file);
+      const s = await analyzeApi.smartFill(file, setAnalyzeProgress);
       setForm((f) => ({
         title: s.title || f.title,
         domain_id: f.domain_id,
@@ -160,11 +156,20 @@ function ModuleEditor({
           <input ref={smartFileRef} type="file" accept={SMART_ACCEPT} style={{ display: 'none' }}
             onChange={(e) => { if (e.target.files?.[0]) runAnalysis(e.target.files[0]); }} />
           {analyzing ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <Spinner size={18} />
-              <span style={{ fontSize: 14, color: '#5B21B6', fontWeight: 500 }}>
-                Analyzing content… this may take up to a minute for video
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Spinner size={18} />
+                <span style={{ fontSize: 14, color: '#5B21B6', fontWeight: 500 }}>
+                  {analyzeProgress < 85 ? `Uploading… ${analyzeProgress}%` : 'Analyzing with AI…'}
+                </span>
+              </div>
+              <div style={{ width: '100%', height: 4, background: '#EDE9FE', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{
+                  width: `${analyzeProgress}%`, height: '100%',
+                  background: '#7C3AED', borderRadius: 2,
+                  transition: 'width 300ms ease',
+                }} />
+              </div>
             </div>
           ) : (
             <>
