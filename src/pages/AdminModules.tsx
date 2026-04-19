@@ -423,8 +423,11 @@ export default function AdminModules() {
       setEditing(created);
       setPanel('edit');
       // pendingChecklist was set by SmartFill — ChecklistSection will consume it
-    } catch { setError('Could not create module.'); }
-    finally { setSaving(false); }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? (err as Error)?.message ?? 'Could not create module.';
+      setError(msg);
+    } finally { setSaving(false); }
   };
 
   const handleEdit = async (d: Record<string, unknown>) => {
@@ -559,6 +562,12 @@ export default function AdminModules() {
 
       {/* Create panel */}
       <SlideOver isOpen={panel === 'create'} onClose={closePanel} title="New module skill">
+        {error && (
+          <div style={{ marginBottom: 16, fontSize: 13, color: '#DC2626', background: '#FEF2F2',
+            borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+            {error}
+          </div>
+        )}
         <ModuleEditor domains={domains} onSave={handleCreate}
           onCancel={closePanel} saving={saving}
           existingTitles={moduleTitles}
@@ -568,6 +577,12 @@ export default function AdminModules() {
 
       {/* Edit panel */}
       <SlideOver isOpen={panel === 'edit'} onClose={closePanel} title="Edit module skill">
+        {error && (
+          <div style={{ marginBottom: 16, fontSize: 13, color: '#DC2626', background: '#FEF2F2',
+            borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+            {error}
+          </div>
+        )}
         {editing && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             <ModuleEditor initial={editing} domains={domains} onSave={handleEdit}
