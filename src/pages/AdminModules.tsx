@@ -466,14 +466,13 @@ export default function AdminModules() {
     try {
       const created = await moduleSkillsApi.create(d);
       setModules((prev) => [...prev, created]);
-      // Auto-attach smart fill file as media (server copies R2 → S3, no re-upload needed)
+      // Fire media registration in background — don't block the panel transition
       if (pendingSmartMedia) {
-        try {
-          await analyzeApi.registerMedia(pendingSmartMedia.key, created.id, pendingSmartMedia.originalName, pendingSmartMedia.mimeType);
-        } catch { /* non-fatal — media attach failed but module was created */ }
+        const pm = pendingSmartMedia;
         setPendingSmartMedia(null);
+        analyzeApi.registerMedia(pm.key, created.id, pm.originalName, pm.mimeType).catch(() => {});
       }
-      setEditing(created);
+      setEditing({ ...created, _justCreated: true } as ModuleSkill);
       setPanel('edit');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -630,6 +629,12 @@ export default function AdminModules() {
 
       {/* Edit panel */}
       <SlideOver isOpen={panel === 'edit'} onClose={closePanel} title="Edit module skill">
+        {(editing as (ModuleSkill & { _justCreated?: boolean }) | null)?._justCreated && (
+          <div style={{ marginBottom: 16, fontSize: 13, color: '#15803D', background: '#F0FDF4',
+            borderRadius: 'var(--radius-md)', padding: '8px 12px', border: '1px solid #BBF7D0' }}>
+            Module created — add media and checklist below, then close when done.
+          </div>
+        )}
         {error && (
           <div style={{ marginBottom: 16, fontSize: 13, color: '#DC2626', background: '#FEF2F2',
             borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
