@@ -62,8 +62,8 @@ function ModuleEditor({
     objective: savedDraft?.objective ?? initial?.objective ?? '',
     why_it_matters: savedDraft?.why_it_matters ?? initial?.why_it_matters ?? '',
     context_note: savedDraft?.context_note ?? initial?.context_note ?? '',
-    what_to_do: savedDraft?.what_to_do ?? initial?.what_to_do ?? '',
   });
+  const [steps, setSteps] = useState<string[]>(savedDraft?.steps ?? []);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(savedDraft ? new Date() : null);
   const [localDomains, setLocalDomains] = useState<Domain[]>(initialDomains);
   const [creatingDomain, setCreatingDomain] = useState(false);
@@ -78,10 +78,10 @@ function ModuleEditor({
   const smartFileRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const persistDraft = useCallback((data: typeof form) => {
+  const persistDraft = useCallback((data: typeof form, currentSteps?: string[]) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      localStorage.setItem(draftKey, JSON.stringify(data));
+      localStorage.setItem(draftKey, JSON.stringify({ ...data, steps: currentSteps }));
       setDraftSavedAt(new Date());
     }, 800);
   }, [draftKey]);
@@ -96,9 +96,14 @@ function ModuleEditor({
     setAiFields((prev) => { const n = new Set(prev); n.delete(k); return n; });
     setForm((f) => {
       const next = { ...f, [k]: v };
-      persistDraft(next);
+      persistDraft(next, steps);
       return next;
     });
+  };
+
+  const setStepsAndSave = (newSteps: string[]) => {
+    setSteps(newSteps);
+    persistDraft(form, newSteps);
   };
 
   const otherTitles = existingTitles.filter((t) => t !== initial?.title);
@@ -141,13 +146,12 @@ function ModuleEditor({
           objective: s.objective || f.objective,
           why_it_matters: s.why_it_matters || f.why_it_matters,
           context_note: s.context_note || f.context_note,
-          what_to_do: s.what_to_do || f.what_to_do,
         };
-        persistDraft(next);
+        persistDraft(next, s.checklist_items?.length ? s.checklist_items : steps);
         return next;
       });
-      setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'what_to_do']));
-      if (s.checklist_items?.length) onPendingChecklist?.(s.checklist_items);
+      setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'steps']));
+      if (s.checklist_items?.length) setSteps(s.checklist_items);
       if (pendingMedia) onPendingMedia?.(pendingMedia);
 
       // Auto-suggest domain if no domain selected
@@ -309,15 +313,45 @@ function ModuleEditor({
         </span>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">
-          What to do {aiFields.has('what_to_do') && AI_BADGE}
-        </label>
-        <textarea className="form-textarea" value={form.what_to_do}
-          onChange={(e) => set('what_to_do', e.target.value)}
-          placeholder="Step-by-step instructions or action items..." rows={4}
-          style={aiFields.has('what_to_do') ? { borderColor: '#A78BFA' } : {}} />
-      </div>
+      {isCreate && (
+        <div className="form-group">
+          <label className="form-label">
+            Steps {aiFields.has('steps') && AI_BADGE}
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>
+              Learners check these off to complete the module
+            </span>
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {steps.map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-tertiary)', width: 22, flexShrink: 0, textAlign: 'right' }}>{i + 1}.</span>
+                <input
+                  className="form-input"
+                  value={step}
+                  onChange={(e) => {
+                    const next = [...steps]; next[i] = e.target.value;
+                    setStepsAndSave(next);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); setStepsAndSave([...steps, '']); }
+                  }}
+                  placeholder={`Step ${i + 1}`}
+                  style={{ flex: 1, ...(aiFields.has('steps') ? { borderColor: '#A78BFA' } : {}) }}
+                  autoFocus={i === steps.length - 1 && step === ''}
+                />
+                <button type="button" className="btn btn-ghost btn-icon"
+                  onClick={() => setStepsAndSave(steps.filter((_, j) => j !== i))}
+                  style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="btn btn-ghost btn-sm"
+              onClick={() => setStepsAndSave([...steps, ''])}
+              style={{ alignSelf: 'flex-start', color: 'var(--accent)', marginTop: 2 }}>
+              + Add step
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
         {draftSavedAt && (
@@ -325,9 +359,11 @@ function ModuleEditor({
             Draft saved {draftSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         )}
-        <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary" disabled={!form.title.trim() || saving}
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+        <button type="button" className="btn btn-primary" disabled={!form.title.trim() || saving}
           onClick={() => {
+            const validSteps = steps.map((s) => s.trim()).filter(Boolean);
+            if (validSteps.length) onPendingChecklist?.(validSteps);
             clearDraft();
             onSave({
               title: form.title.trim(),
@@ -335,7 +371,6 @@ function ModuleEditor({
               objective: form.objective.trim() || null,
               why_it_matters: form.why_it_matters.trim() || null,
               context_note: form.context_note.trim() || null,
-              what_to_do: form.what_to_do.trim() || null,
             });
           }}>
           {saving ? <Spinner size={16} /> : (initial?.id ? 'Save changes' : 'Create module')}
@@ -446,6 +481,7 @@ export default function AdminModules() {
   const [error, setError] = useState('');
   const [pendingChecklist, setPendingChecklist] = useState<string[]>([]);
   const [pendingSmartMedia, setPendingSmartMedia] = useState<PendingMedia | null>(null);
+  const [justCreated, setJustCreated] = useState(false);
   const [panel, setPanel] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<ModuleSkill | null>(null);
   const [expandedChecklist, setExpandedChecklist] = useState<string | null>(null);
@@ -459,20 +495,34 @@ export default function AdminModules() {
 
   useEffect(() => { load(); }, [filterDomain]);
 
-  const closePanel = () => { setPanel(null); setEditing(null); };
+  const closePanel = () => { setPanel(null); setEditing(null); setJustCreated(false); };
 
   const handleCreate = async (d: Record<string, unknown>) => {
     setSaving(true); setError('');
     try {
-      const created = await moduleSkillsApi.create(d);
+      const created = await moduleSkillsApi.create(d) as ModuleSkill;
       setModules((prev) => [...prev, created]);
-      // Fire media registration in background — don't block the panel transition
+      // Create checklist items from steps in background
+      const steps = [...pendingChecklist];
+      setPendingChecklist([]);
+      if (steps.length) {
+        (async () => {
+          try {
+            const t = await checklistsApi.createTemplate(created.id, { title: 'Completion Checklist' });
+            for (let i = 0; i < steps.length; i++) {
+              await checklistsApi.addItem(t.id, { label: steps[i], item_type: 'checkbox', is_required: true, display_order: i });
+            }
+          } catch { /* non-fatal */ }
+        })();
+      }
+      // Attach smart fill file as media in background
       if (pendingSmartMedia) {
         const pm = pendingSmartMedia;
         setPendingSmartMedia(null);
         analyzeApi.registerMedia(pm.key, created.id, pm.originalName, pm.mimeType).catch(() => {});
       }
-      setEditing({ ...created, _justCreated: true } as ModuleSkill);
+      setJustCreated(true);
+      setEditing(created);
       setPanel('edit');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -629,10 +679,12 @@ export default function AdminModules() {
 
       {/* Edit panel */}
       <SlideOver isOpen={panel === 'edit'} onClose={closePanel} title="Edit module skill">
-        {(editing as (ModuleSkill & { _justCreated?: boolean }) | null)?._justCreated && (
+        {justCreated && (
           <div style={{ marginBottom: 16, fontSize: 13, color: '#15803D', background: '#F0FDF4',
-            borderRadius: 'var(--radius-md)', padding: '8px 12px', border: '1px solid #BBF7D0' }}>
-            Module created — add media and checklist below, then close when done.
+            borderRadius: 'var(--radius-md)', padding: '10px 14px', border: '1px solid #BBF7D0',
+            display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>✓</span>
+            <span><strong>Module created.</strong> Your steps were saved as the checklist. Add media below, then close when done.</span>
           </div>
         )}
         {error && (
