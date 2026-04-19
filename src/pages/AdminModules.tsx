@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { moduleSkillsApi, domainsApi, checklistsApi, analyzeApi } from '../lib/api';
 import { SlideOver, EmptyState, PageHeader, Alert, Spinner, SimilarityWarning } from '../components/ui';
 import { MediaUpload } from '../components/MediaUpload';
@@ -48,14 +48,23 @@ function ModuleEditor({
   onPendingChecklist?: (items: string[]) => void;
   onPendingMedia?: (pm: PendingMedia) => void;
 }) {
+  const draftKey = initial?.id ? `module-draft-${initial.id}` : 'module-draft-new';
+
+  const loadDraft = () => {
+    try { return JSON.parse(localStorage.getItem(draftKey) ?? 'null'); } catch { return null; }
+  };
+
+  const savedDraft = !initial?.id ? loadDraft() : null; // only restore drafts for new modules
+
   const [form, setForm] = useState({
-    title: initial?.title ?? '',
-    domain_id: initial?.domain_id ?? '',
-    objective: initial?.objective ?? '',
-    why_it_matters: initial?.why_it_matters ?? '',
-    context_note: initial?.context_note ?? '',
-    what_to_do: initial?.what_to_do ?? '',
+    title: savedDraft?.title ?? initial?.title ?? '',
+    domain_id: savedDraft?.domain_id ?? initial?.domain_id ?? '',
+    objective: savedDraft?.objective ?? initial?.objective ?? '',
+    why_it_matters: savedDraft?.why_it_matters ?? initial?.why_it_matters ?? '',
+    context_note: savedDraft?.context_note ?? initial?.context_note ?? '',
+    what_to_do: savedDraft?.what_to_do ?? initial?.what_to_do ?? '',
   });
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(savedDraft ? new Date() : null);
   const [localDomains, setLocalDomains] = useState<Domain[]>(initialDomains);
   const [creatingDomain, setCreatingDomain] = useState(false);
   const [newDomainName, setNewDomainName] = useState('');
@@ -67,9 +76,29 @@ function ModuleEditor({
   const [smartDragging, setSmartDragging] = useState(false);
   const newDomainInputRef = useRef<HTMLInputElement>(null);
   const smartFileRef = useRef<HTMLInputElement>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistDraft = useCallback((data: typeof form) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      localStorage.setItem(draftKey, JSON.stringify(data));
+      setDraftSavedAt(new Date());
+    }, 800);
+  }, [draftKey]);
+
+  const clearDraft = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    localStorage.removeItem(draftKey);
+    setDraftSavedAt(null);
+  }, [draftKey]);
+
   const set = (k: string, v: string) => {
     setAiFields((prev) => { const n = new Set(prev); n.delete(k); return n; });
-    setForm((f) => ({ ...f, [k]: v }));
+    setForm((f) => {
+      const next = { ...f, [k]: v };
+      persistDraft(next);
+      return next;
+    });
   };
 
   const otherTitles = existingTitles.filter((t) => t !== initial?.title);
@@ -105,14 +134,18 @@ function ModuleEditor({
     setAnalyzing(true);
     try {
       const { suggestions: s, pendingMedia } = await analyzeApi.smartFill(file, setAnalyzeProgress);
-      setForm((f) => ({
-        title: s.title || f.title,
-        domain_id: f.domain_id,
-        objective: s.objective || f.objective,
-        why_it_matters: s.why_it_matters || f.why_it_matters,
-        context_note: s.context_note || f.context_note,
-        what_to_do: s.what_to_do || f.what_to_do,
-      }));
+      setForm((f) => {
+        const next = {
+          title: s.title || f.title,
+          domain_id: f.domain_id,
+          objective: s.objective || f.objective,
+          why_it_matters: s.why_it_matters || f.why_it_matters,
+          context_note: s.context_note || f.context_note,
+          what_to_do: s.what_to_do || f.what_to_do,
+        };
+        persistDraft(next);
+        return next;
+      });
       setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'what_to_do']));
       if (s.checklist_items?.length) onPendingChecklist?.(s.checklist_items);
       if (pendingMedia) onPendingMedia?.(pendingMedia);
@@ -286,17 +319,25 @@ function ModuleEditor({
           style={aiFields.has('what_to_do') ? { borderColor: '#A78BFA' } : {}} />
       </div>
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
+        {draftSavedAt && (
+          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+            Draft saved {draftSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
         <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
         <button className="btn btn-primary" disabled={!form.title.trim() || saving}
-          onClick={() => onSave({
-            title: form.title.trim(),
-            domain_id: form.domain_id || null,
-            objective: form.objective.trim() || null,
-            why_it_matters: form.why_it_matters.trim() || null,
-            context_note: form.context_note.trim() || null,
-            what_to_do: form.what_to_do.trim() || null,
-          })}>
+          onClick={() => {
+            clearDraft();
+            onSave({
+              title: form.title.trim(),
+              domain_id: form.domain_id || null,
+              objective: form.objective.trim() || null,
+              why_it_matters: form.why_it_matters.trim() || null,
+              context_note: form.context_note.trim() || null,
+              what_to_do: form.what_to_do.trim() || null,
+            });
+          }}>
           {saving ? <Spinner size={16} /> : (initial?.id ? 'Save changes' : 'Create module')}
         </button>
       </div>
