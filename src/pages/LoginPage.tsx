@@ -52,14 +52,7 @@ export default function LoginPage() {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <h1 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '2.2rem',
-            color: 'var(--text-primary)',
-            marginBottom: 6,
-          }}>
-            AethoFlo
-          </h1>
+          <img src="/logo.svg" alt="AethoFlo" style={{ height: 36, width: 'auto', marginBottom: 10 }} />
           <p style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
             Roadmap-based training delivery
           </p>

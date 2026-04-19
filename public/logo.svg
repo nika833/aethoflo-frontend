@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40">
+  <!-- Icon: overlapping circles -->
+  <circle cx="16" cy="20" r="13" fill="#1A1311"/>
+  <circle cx="27" cy="20" r="13" fill="#C96B47" opacity="0.92"/>
+  <!-- Wordmark -->
+  <text x="48" y="26" font-family="Georgia, 'Times New Roman', serif" font-size="20" font-weight="400" fill="#1A1311">aetho</text>
+  <text x="101" y="26" font-family="Georgia, 'Times New Roman', serif" font-size="20" font-weight="400" fill="#C96B47">flo</text>
+</svg>

@@ -34,9 +34,12 @@ const SMART_ACCEPT = [
 // ─── Module Editor form ───────────────────────────────────────────────────────
 interface PendingMedia { key: string; originalName: string; mimeType: string; }
 
+interface ProposedField { key: string; label: string; current: string; proposed: string; }
+interface AIProposal { fields: ProposedField[]; steps: string[]; pendingMedia?: PendingMedia; }
+
 function ModuleEditor({
   initial, domains: initialDomains, onSave, onCancel, saving, onDomainCreated, existingTitles,
-  onPendingChecklist, onPendingMedia,
+  onPendingChecklist, onPendingMedia, onApplyProposedSteps,
 }: {
   initial?: Partial<ModuleSkill>;
   domains: Domain[];
@@ -47,6 +50,7 @@ function ModuleEditor({
   existingTitles: string[];
   onPendingChecklist?: (items: string[]) => void;
   onPendingMedia?: (pm: PendingMedia) => void;
+  onApplyProposedSteps?: (steps: string[]) => Promise<void>;
 }) {
   const draftKey = initial?.id ? `module-draft-${initial.id}` : 'module-draft-new';
 
@@ -74,6 +78,8 @@ function ModuleEditor({
   const [analyzeError, setAnalyzeError] = useState('');
   const [aiFields, setAiFields] = useState<Set<string>>(new Set());
   const [smartDragging, setSmartDragging] = useState(false);
+  const [aiProposal, setAiProposal] = useState<AIProposal | null>(null);
+  const [applyingSteps, setApplyingSteps] = useState(false);
   const newDomainInputRef = useRef<HTMLInputElement>(null);
   const smartFileRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -135,28 +141,39 @@ function ModuleEditor({
     setAnalyzeError('');
     setAnalyzeProgress(0);
     setAnalyzing(true);
+    setAiProposal(null);
     try {
       const { suggestions: s, pendingMedia } = await analyzeApi.smartFill(file, setAnalyzeProgress);
-      const aiSteps = s.checklist_items?.length ? s.checklist_items : steps;
-      const nextForm = {
-        title: s.title || form.title,
-        domain_id: form.domain_id,
-        objective: s.objective || form.objective,
-        why_it_matters: s.why_it_matters || form.why_it_matters,
-        context_note: s.context_note || form.context_note,
-      };
-      setForm(nextForm);
-      if (s.checklist_items?.length) setSteps(s.checklist_items);
-      setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'steps']));
-      persistDraft(nextForm, aiSteps);
-      if (pendingMedia) onPendingMedia?.(pendingMedia);
 
-      // Auto-suggest domain if no domain selected
-      if (!form.domain_id && s.domain_suggestion) {
-        const match = localDomains.find(
-          (d) => d.name.toLowerCase() === s.domain_suggestion!.toLowerCase()
-        );
-        if (match) setForm((f) => ({ ...f, domain_id: match.id }));
+      if (isCreate) {
+        // Create mode: apply directly
+        const aiSteps = s.checklist_items?.length ? s.checklist_items : steps;
+        const nextForm = {
+          title: s.title || form.title,
+          domain_id: form.domain_id,
+          objective: s.objective || form.objective,
+          why_it_matters: s.why_it_matters || form.why_it_matters,
+          context_note: s.context_note || form.context_note,
+        };
+        setForm(nextForm);
+        if (s.checklist_items?.length) setSteps(s.checklist_items);
+        setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'steps']));
+        persistDraft(nextForm, aiSteps);
+        if (pendingMedia) onPendingMedia?.(pendingMedia);
+        if (!form.domain_id && s.domain_suggestion) {
+          const match = localDomains.find((d) => d.name.toLowerCase() === s.domain_suggestion!.toLowerCase());
+          if (match) setForm((f) => ({ ...f, domain_id: match.id }));
+        }
+      } else {
+        // Edit mode: build proposal for user to review
+        const LABELS: Record<string, string> = {
+          title: 'Title', objective: 'Objective',
+          why_it_matters: 'Why it matters', context_note: 'Context note',
+        };
+        const fields: ProposedField[] = (['title', 'objective', 'why_it_matters', 'context_note'] as const)
+          .filter((k) => s[k] && s[k] !== form[k])
+          .map((k) => ({ key: k, label: LABELS[k], current: form[k] ?? '', proposed: s[k] ?? '' }));
+        setAiProposal({ fields, steps: s.checklist_items ?? [], pendingMedia });
       }
     } catch (err: unknown) {
       setAnalyzeError((err as Error).message ?? 'Analysis failed');
@@ -170,56 +187,185 @@ function ModuleEditor({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-      {/* Smart fill — only on create */}
-      {isCreate && (
-        <div
-          onDragOver={(e) => { e.preventDefault(); setSmartDragging(true); }}
-          onDragLeave={() => setSmartDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault(); setSmartDragging(false);
-            const f = e.dataTransfer.files[0];
-            if (f) runAnalysis(f);
-          }}
-          onClick={() => !analyzing && smartFileRef.current?.click()}
-          style={{
-            border: `2px dashed ${smartDragging ? '#7C3AED' : analyzing ? '#7C3AED' : '#C4B5FD'}`,
-            borderRadius: 'var(--radius-lg)',
-            padding: '18px 16px',
-            textAlign: 'center',
-            cursor: analyzing ? 'default' : 'pointer',
-            background: smartDragging ? '#EDE9FE' : analyzing ? '#F5F3FF' : '#FAFAFF',
-            transition: 'all 150ms',
-          }}
-        >
-          <input ref={smartFileRef} type="file" accept={SMART_ACCEPT} style={{ display: 'none' }}
-            onChange={(e) => { if (e.target.files?.[0]) runAnalysis(e.target.files[0]); }} />
-          {analyzing ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Spinner size={18} />
-                <span style={{ fontSize: 14, color: '#5B21B6', fontWeight: 500 }}>
-                  {analyzeProgress < 85 ? `Uploading… ${analyzeProgress}%` : 'Analyzing with AI…'}
-                </span>
-              </div>
-              <div style={{ width: '100%', height: 4, background: '#EDE9FE', borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{
-                  width: `${analyzeProgress}%`, height: '100%',
-                  background: '#7C3AED', borderRadius: 2,
-                  transition: 'width 300ms ease',
-                }} />
-              </div>
+      {/* Smart fill — create: auto-fills; edit: shows proposal for review */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setSmartDragging(true); }}
+        onDragLeave={() => setSmartDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault(); setSmartDragging(false);
+          const f = e.dataTransfer.files[0];
+          if (f) runAnalysis(f);
+        }}
+        onClick={() => !analyzing && smartFileRef.current?.click()}
+        style={{
+          border: `2px dashed ${smartDragging ? '#7C3AED' : analyzing ? '#7C3AED' : '#C4B5FD'}`,
+          borderRadius: 'var(--radius-lg)',
+          padding: '18px 16px',
+          textAlign: 'center',
+          cursor: analyzing ? 'default' : 'pointer',
+          background: smartDragging ? '#EDE9FE' : analyzing ? '#F5F3FF' : '#FAFAFF',
+          transition: 'all 150ms',
+        }}
+      >
+        <input ref={smartFileRef} type="file" accept={SMART_ACCEPT} style={{ display: 'none' }}
+          onChange={(e) => { if (e.target.files?.[0]) runAnalysis(e.target.files[0]); }} />
+        {analyzing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Spinner size={18} />
+              <span style={{ fontSize: 14, color: '#5B21B6', fontWeight: 500 }}>
+                {analyzeProgress < 85 ? `Uploading… ${analyzeProgress}%` : 'Analyzing with AI…'}
+              </span>
             </div>
-          ) : (
-            <>
-              <div style={{ fontSize: 22, marginBottom: 6 }}>✨</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#5B21B6', marginBottom: 2 }}>
-                Smart fill from file
+            <div style={{ width: '100%', height: 4, background: '#EDE9FE', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ width: `${analyzeProgress}%`, height: '100%', background: '#7C3AED', borderRadius: 2, transition: 'width 300ms ease' }} />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 22, marginBottom: 6 }}>✨</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#5B21B6', marginBottom: 2 }}>
+              {isCreate ? 'Smart fill from file' : 'Re-analyze with AI'}
+            </div>
+            <div style={{ fontSize: 12, color: '#7C3AED' }}>
+              {isCreate
+                ? 'Drop a video, audio, PDF, or doc — AI will pre-fill the form below'
+                : 'Drop a file — AI will suggest updates for your review before anything changes'}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* AI Proposal panel — edit mode only */}
+      {aiProposal && !isCreate && (
+        <div style={{
+          border: '1px solid #A78BFA',
+          borderRadius: 'var(--radius-lg)',
+          background: '#FAFAFF',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '12px 16px',
+            background: '#EDE9FE',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>✨</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#5B21B6' }}>
+                AI Suggestions — review before applying
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-sm"
+                style={{ background: '#7C3AED', color: '#fff', border: 'none' }}
+                onClick={() => {
+                  // Apply all field changes
+                  const next = { ...form };
+                  const accepted = new Set<string>();
+                  aiProposal.fields.forEach((f) => {
+                    (next as Record<string, string>)[f.key] = f.proposed;
+                    accepted.add(f.key);
+                  });
+                  setForm(next);
+                  setAiFields(accepted);
+                  persistDraft(next, steps);
+                  // Apply all steps
+                  if (aiProposal.steps.length) {
+                    setApplyingSteps(true);
+                    onApplyProposedSteps?.(aiProposal.steps).finally(() => setApplyingSteps(false));
+                  }
+                  if (aiProposal.pendingMedia) onPendingMedia?.(aiProposal.pendingMedia);
+                  setAiProposal(null);
+                }}
+              >
+                Accept all
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAiProposal(null)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+
+          <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Field proposals */}
+            {aiProposal.fields.map((f) => (
+              <div key={f.key} style={{
+                background: '#fff', border: '1px solid #DDD6FE',
+                borderRadius: 'var(--radius-md)', padding: '10px 14px',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {f.label}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ background: '#7C3AED', color: '#fff', border: 'none', fontSize: 12 }}
+                    onClick={() => {
+                      const next = { ...form, [f.key]: f.proposed };
+                      setForm(next);
+                      setAiFields((prev) => new Set([...prev, f.key]));
+                      persistDraft(next, steps);
+                      setAiProposal((p) => p ? { ...p, fields: p.fields.filter((x) => x.key !== f.key) } : null);
+                    }}
+                  >
+                    Apply
+                  </button>
+                </div>
+                {f.current && (
+                  <div style={{ fontSize: 13, color: 'var(--text-tertiary)', textDecoration: 'line-through' }}>
+                    {f.current}
+                  </div>
+                )}
+                <div style={{ fontSize: 13, color: '#5B21B6', fontWeight: 500 }}>{f.proposed}</div>
               </div>
-              <div style={{ fontSize: 12, color: '#7C3AED' }}>
-                Drop a video, audio, PDF, or doc — AI will pre-fill the form below
+            ))}
+
+            {/* Proposed checklist steps */}
+            {aiProposal.steps.length > 0 && (
+              <div style={{
+                background: '#fff', border: '1px solid #DDD6FE',
+                borderRadius: 'var(--radius-md)', padding: '10px 14px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Checklist steps ({aiProposal.steps.length})
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ background: '#7C3AED', color: '#fff', border: 'none', fontSize: 12 }}
+                    disabled={applyingSteps}
+                    onClick={() => {
+                      setApplyingSteps(true);
+                      onApplyProposedSteps?.(aiProposal.steps)
+                        .then(() => setAiProposal((p) => p ? { ...p, steps: [] } : null))
+                        .finally(() => setApplyingSteps(false));
+                    }}
+                  >
+                    {applyingSteps ? <Spinner size={12} /> : 'Add to checklist'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {aiProposal.steps.map((step, i) => (
+                    <div key={i} style={{ fontSize: 13, color: '#5B21B6', display: 'flex', gap: 8 }}>
+                      <span style={{ color: '#A78BFA', flexShrink: 0 }}>{i + 1}.</span>
+                      {step}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </>
-          )}
+            )}
+
+            {aiProposal.fields.length === 0 && aiProposal.steps.length === 0 && (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', padding: 8 }}>
+                No changes to suggest — content looks up to date.
+              </div>
+            )}
+          </div>
         </div>
       )}
       {analyzeError && (
@@ -378,13 +524,14 @@ function ModuleEditor({
 }
 
 // ─── Checklist sub-editor ────────────────────────────────────────────────────
-function ChecklistSection({ moduleId, autoItems }: { moduleId: string; autoItems?: string[] }) {
+function ChecklistSection({ moduleId, autoItems, refreshKey }: { moduleId: string; autoItems?: string[]; refreshKey?: number }) {
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [newItemLabel, setNewItemLabel] = useState<Record<string, string>>({});
   const autoCreated = useRef(false);
 
   useEffect(() => {
+    setLoading(true);
     checklistsApi.listByModule(moduleId).then(async (loaded) => {
       if (autoItems?.length && !autoCreated.current && loaded.length === 0) {
         autoCreated.current = true;
@@ -401,7 +548,7 @@ function ChecklistSection({ moduleId, autoItems }: { moduleId: string; autoItems
       }
       setTemplates(loaded);
     }).finally(() => setLoading(false));
-  }, [moduleId]);
+  }, [moduleId, refreshKey]);
 
   const createTemplate = async () => {
     const t = await checklistsApi.createTemplate(moduleId, { title: 'Completion Checklist' });
@@ -479,9 +626,9 @@ export default function AdminModules() {
   const [pendingChecklist, setPendingChecklist] = useState<string[]>([]);
   const [pendingSmartMedia, setPendingSmartMedia] = useState<PendingMedia | null>(null);
   const [justCreated, setJustCreated] = useState(false);
+  const [checklistRefreshKey, setChecklistRefreshKey] = useState(0);
   const [panel, setPanel] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<ModuleSkill | null>(null);
-  const [expandedChecklist, setExpandedChecklist] = useState<string | null>(null);
   const [filterDomain, setFilterDomain] = useState('');
 
   const load = () => Promise.all([
@@ -535,6 +682,26 @@ export default function AdminModules() {
       closePanel();
     } catch { setError('Could not update module.'); }
     finally { setSaving(false); }
+  };
+
+  const handleApplyProposedSteps = async (steps: string[]) => {
+    if (!editing) return;
+    const templates = await checklistsApi.listByModule(editing.id);
+    let templateId: string;
+    if (templates.length > 0) {
+      templateId = templates[0].id;
+    } else {
+      const t = await checklistsApi.createTemplate(editing.id, { title: 'Completion Checklist' });
+      templateId = t.id;
+    }
+    const existing: ChecklistTemplate[] = templates;
+    const existingCount = existing.length > 0 ? (existing[0].items?.length ?? 0) : 0;
+    for (let i = 0; i < steps.length; i++) {
+      await checklistsApi.addItem(templateId, {
+        label: steps[i], item_type: 'checkbox', is_required: true, display_order: existingCount + i,
+      });
+    }
+    setChecklistRefreshKey((k) => k + 1);
   };
 
   const handleDuplicate = async (mod: ModuleSkill) => {
@@ -626,10 +793,6 @@ export default function AdminModules() {
                     <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>✓ Checklist</span>
                   )}
                   <button className="btn btn-secondary btn-sm"
-                    onClick={() => setExpandedChecklist(expandedChecklist === mod.id ? null : mod.id)}>
-                    {expandedChecklist === mod.id ? 'Close' : 'Checklist'}
-                  </button>
-                  <button className="btn btn-secondary btn-sm"
                     disabled={duplicating === mod.id}
                     onClick={() => handleDuplicate(mod)}
                     title="Duplicate this module">
@@ -641,16 +804,6 @@ export default function AdminModules() {
                 </div>
               </div>
 
-              {expandedChecklist === mod.id && (
-                <div style={{ padding: '16px 20px 20px',
-                  borderTop: '1px solid var(--border-light)' }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)',
-                    letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
-                    Checklist items
-                  </div>
-                  <ChecklistSection moduleId={mod.id} />
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -693,7 +846,11 @@ export default function AdminModules() {
             <ModuleEditor initial={editing} domains={domains} onSave={handleEdit}
               onCancel={closePanel} saving={saving}
               existingTitles={moduleTitles}
-              onDomainCreated={(d) => setDomains((prev) => [...prev, d])} />
+              onDomainCreated={(d) => setDomains((prev) => [...prev, d])}
+              onPendingMedia={(pm) => {
+                analyzeApi.registerMedia(pm.key, editing.id, pm.originalName, pm.mimeType).catch(() => {});
+              }}
+              onApplyProposedSteps={handleApplyProposedSteps} />
             <div style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 24 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
                 Media files
@@ -707,7 +864,7 @@ export default function AdminModules() {
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 12 }}>
                 Completion checklist
               </div>
-              <ChecklistSection moduleId={editing.id} autoItems={pendingChecklist.length ? pendingChecklist : undefined} />
+              <ChecklistSection moduleId={editing.id} autoItems={pendingChecklist.length ? pendingChecklist : undefined} refreshKey={checklistRefreshKey} />
             </div>
           </div>
         )}

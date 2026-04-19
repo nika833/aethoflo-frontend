@@ -1,5 +1,4 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { mediaApi } from '../lib/api';
 import { Spinner } from './ui';
 
 interface MediaFile {
@@ -8,6 +7,7 @@ interface MediaFile {
   mime_type: string;
   size: number;
   status: 'pending' | 'uploading' | 'done' | 'error';
+  progress?: number;
   error?: string;
   url?: string;
 }
@@ -53,66 +53,88 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
   const recTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const uploadFile = useCallback(async (file: File) => {
-    const entry: MediaFile = {
-      name: file.name,
-      mime_type: file.type,
-      size: file.size,
-      status: 'uploading',
-    };
+    const entry: MediaFile = { name: file.name, mime_type: file.type, size: file.size, status: 'uploading', progress: 0 };
     setFiles((f) => [...f, entry]);
-    const idx = -1; // use name as key
+
+    const updateProgress = (pct: number) =>
+      setFiles((f) => f.map((x) => x.name === entry.name && x.status === 'uploading' ? { ...x, progress: pct } : x));
 
     try {
-      const { upload_url, s3_key, media_type, public_url } = await mediaApi.presign({
-        filename: file.name,
-        mime_type: file.type,
-        module_skill_id: moduleId,
+      const base = import.meta.env.VITE_API_URL ?? '';
+      const token = localStorage.getItem('aethoflo_token');
+      const auth: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+      // Step 1: get R2 presigned URL (bypasses Railway 25 MB gateway)
+      const presignRes = await fetch(`${base}/api/analyze/presign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...auth },
+        body: JSON.stringify({ filename: file.name, mime_type: file.type }),
+      });
+      if (!presignRes.ok) {
+        const e = await presignRes.json().catch(() => ({}));
+        throw new Error(e.error ?? 'Could not get upload URL');
+      }
+      const { url, key } = await presignRes.json() as { url: string; key: string };
+
+      // Step 2: upload directly to R2 with progress
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url);
+        xhr.setRequestHeader('Content-Type', file.type);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) updateProgress(Math.round((e.loaded / e.total) * 88));
+        };
+        xhr.onload = () => xhr.status >= 200 && xhr.status < 300
+          ? resolve()
+          : reject(new Error(`Upload failed (${xhr.status}): ${xhr.responseText || 'check R2 CORS policy'}`));
+        xhr.onerror = () => reject(new Error('Upload blocked — check R2 CORS policy allows PUT from this origin'));
+        xhr.send(file);
       });
 
-      await fetch(upload_url, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
-      });
+      updateProgress(92);
 
-      const registered = await mediaApi.register({
-        module_skill_id: moduleId,
-        media_type,
-        title: file.name,
-        url: public_url || upload_url.split('?')[0],
-        s3_key,
-        file_size_bytes: file.size,
-        mime_type: file.type,
+      // Step 3: copy R2 → S3, register in DB
+      const regRes = await fetch(`${base}/api/analyze/register-media`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...auth },
+        body: JSON.stringify({ r2Key: key, moduleId, originalName: file.name, mimeType: file.type }),
       });
+      if (!regRes.ok) {
+        const e = await regRes.json().catch(() => ({}));
+        throw new Error(e.error ?? 'Failed to register media');
+      }
+      const registered = await regRes.json();
 
-      setFiles((f) => f.map((e) =>
-        e.name === entry.name && e.status === 'uploading'
-          ? { ...e, status: 'done', id: registered.id, url: registered.url }
-          : e
+      setFiles((f) => f.map((x) =>
+        x.name === entry.name && x.status === 'uploading'
+          ? { ...x, status: 'done', id: registered.id, url: registered.url, progress: 100 }
+          : x
       ));
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Upload failed';
-      setFiles((f) => f.map((e) =>
-        e.name === entry.name && e.status === 'uploading'
-          ? { ...e, status: 'error', error: msg }
-          : e
+      const msg = (err as Error)?.message ?? 'Upload failed';
+      setFiles((f) => f.map((x) =>
+        x.name === entry.name && x.status === 'uploading' ? { ...x, status: 'error', error: msg } : x
       ));
     }
   }, [moduleId]);
 
-  const handleFiles = (incoming: FileList | File[]) => {
-    Array.from(incoming).forEach(uploadFile);
-  };
+  const handleFiles = (incoming: FileList | File[]) => Array.from(incoming).forEach(uploadFile);
 
   const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
+    e.preventDefault(); setDragging(false);
     if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
   };
 
   const removeFile = async (f: MediaFile) => {
     if (f.id) {
-      try { await mediaApi.delete(f.id); } catch {}
+      const base = import.meta.env.VITE_API_URL ?? '';
+      const token = localStorage.getItem('aethoflo_token');
+      try {
+        await fetch(`${base}/api/media/${f.id}`, {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch {}
     }
     setFiles((prev) => prev.filter((x) => x !== f));
   };
@@ -131,15 +153,12 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
         const mime = mode === 'video' ? 'video/webm' : 'audio/webm';
         const blob = new Blob(recChunks.current, { type: mime });
         const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-        const file = new File([blob], `recording-${ts}.webm`, { type: mime });
-        uploadFile(file);
-        setRecording('idle');
-        setRecSeconds(0);
+        uploadFile(new File([blob], `recording-${ts}.webm`, { type: mime }));
+        setRecording('idle'); setRecSeconds(0);
         if (recTimer.current) clearInterval(recTimer.current);
       };
       mr.start();
-      setRecording(mode);
-      setRecSeconds(0);
+      setRecording(mode); setRecSeconds(0);
       recTimer.current = setInterval(() => setRecSeconds((s) => s + 1), 1000);
     } catch {
       alert('Could not access microphone/camera. Check browser permissions.');
@@ -179,14 +198,8 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
           Video · Audio · PDF · Word doc — multiple files allowed
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={ACCEPT}
-          style={{ display: 'none' }}
-          onChange={(e) => e.target.files && handleFiles(e.target.files)}
-        />
+        <input ref={fileInputRef} type="file" multiple accept={ACCEPT} style={{ display: 'none' }}
+          onChange={(e) => e.target.files && handleFiles(e.target.files)} />
       </div>
 
       {/* Record buttons */}
@@ -194,23 +207,13 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
         <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Record:</span>
         {recording === 'idle' ? (
           <>
-            <button className="btn btn-secondary btn-sm" onClick={() => startRecording('audio')}
-              style={{ gap: 6 }}>
-              🎙 Audio
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => startRecording('video')}
-              style={{ gap: 6 }}>
-              📹 Video
-            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => startRecording('audio')} style={{ gap: 6 }}>🎙 Audio</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => startRecording('video')} style={{ gap: 6 }}>📹 Video</button>
           </>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              color: '#DC2626', fontWeight: 600, fontSize: 13,
-            }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#DC2626',
-                animation: 'pulse-soft 1s infinite' }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#DC2626', fontWeight: 600, fontSize: 13 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#DC2626', animation: 'pulse-soft 1s infinite' }} />
               {recording === 'video' ? '📹' : '🎙'} {fmtTime(recSeconds)}
             </span>
             <button className="btn btn-danger btn-sm" onClick={stopRecording}>⏹ Stop & upload</button>
@@ -228,27 +231,30 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
               background: 'var(--surface-2)',
               borderRadius: 'var(--radius-md)',
               border: `1px solid ${f.status === 'error' ? '#FCA5A5' : 'var(--border-light)'}`,
+              flexDirection: 'column',
             }}>
-              <span style={{ fontSize: 20 }}>{fileIcon(f.mime_type)}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {f.name}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+                <span style={{ fontSize: 20 }}>{fileIcon(f.mime_type)}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {f.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                    {fileTypeLabel(f.mime_type)} · {formatBytes(f.size)}
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                  {fileTypeLabel(f.mime_type)} · {formatBytes(f.size)}
-                </div>
+                {f.status === 'uploading' && <Spinner size={16} />}
+                {f.status === 'done' && <span style={{ color: '#2E7D52', fontSize: 16 }}>✓</span>}
+                {f.status === 'error' && <span style={{ fontSize: 12, color: '#DC2626' }}>{f.error}</span>}
+                <button className="btn btn-ghost btn-icon"
+                  style={{ color: 'var(--text-tertiary)', fontSize: 12, flexShrink: 0 }}
+                  onClick={() => removeFile(f)}>✕</button>
               </div>
-
-              {f.status === 'uploading' && <Spinner size={16} />}
-              {f.status === 'done' && <span style={{ color: '#2E7D52', fontSize: 16 }}>✓</span>}
-              {f.status === 'error' && (
-                <span style={{ fontSize: 12, color: '#DC2626' }}>{f.error}</span>
+              {f.status === 'uploading' && typeof f.progress === 'number' && (
+                <div style={{ width: '100%', height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ width: `${f.progress}%`, height: '100%', background: 'var(--accent)', borderRadius: 2, transition: 'width 300ms ease' }} />
+                </div>
               )}
-
-              <button className="btn btn-ghost btn-icon"
-                style={{ color: 'var(--text-tertiary)', fontSize: 12, flexShrink: 0 }}
-                onClick={() => removeFile(f)}>✕</button>
             </div>
           ))}
         </div>

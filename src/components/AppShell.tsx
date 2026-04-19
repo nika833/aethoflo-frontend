@@ -3,18 +3,21 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../lib/authStore';
 
 const ADMIN_NAV = [
-  { to: '/admin',             label: 'Dashboard',     icon: '⊞' },
-  { to: '/admin/domains',     label: 'Domains',       icon: '◫' },
-  { to: '/admin/modules',     label: 'Module Library',icon: '⊟' },
-  { to: '/admin/roadmaps',    label: 'Roadmaps',      icon: '⟶' },
-  { to: '/admin/assignments', label: 'Assignments',   icon: '◎' },
-  { to: '/admin/exports',     label: 'Exports',       icon: '↓' },
+  { to: '/admin',             label: 'Dashboard',      icon: '⊞' },
+  { to: '/admin/domains',     label: 'Domains',        icon: '◫' },
+  { to: '/admin/modules',     label: 'Module Library', icon: '⊟' },
+  { to: '/admin/roadmaps',    label: 'Roadmaps',       icon: '⟶' },
+  { to: '/admin/assignments', label: 'Assignments',    icon: '◎' },
+  { to: '/admin/exports',     label: 'Exports',        icon: '↓' },
 ];
 
 const LEARNER_NAV = [
-  { to: '/learner',          label: 'My Training',  icon: '◈' },
-  { to: '/learner/progress', label: 'Progress',     icon: '◉' },
+  { to: '/learner',          label: 'My Training', icon: '◈' },
+  { to: '/learner/progress', label: 'Progress',    icon: '◉' },
 ];
+
+const SIDEBAR_BG = '#1E1512';
+const BORDER_COLOR = 'rgba(255,255,255,0.08)';
 
 export default function AppShell() {
   const { user, clearAuth } = useAuthStore();
@@ -36,35 +39,29 @@ export default function AppShell() {
         onMouseLeave={() => setHovered(false)}
         style={{
           width: expanded ? 220 : 60,
-          background: 'var(--surface-2)',
-          borderRight: '1px solid var(--border)',
+          background: SIDEBAR_BG,
+          borderRight: `1px solid ${BORDER_COLOR}`,
           display: 'flex', flexDirection: 'column',
           flexShrink: 0,
           transition: 'width 200ms cubic-bezier(0.4,0,0.2,1)',
           overflow: 'hidden',
           position: 'sticky', top: 0, height: '100vh',
         }}>
+
         {/* Logo */}
         <div style={{
           padding: '20px 0',
           display: 'flex', alignItems: 'center',
           justifyContent: expanded ? 'flex-start' : 'center',
           paddingLeft: expanded ? 18 : 0,
-          borderBottom: '1px solid var(--border-light)',
+          borderBottom: `1px solid ${BORDER_COLOR}`,
           minHeight: 64,
           transition: 'padding 200ms cubic-bezier(0.4,0,0.2,1)',
         }}>
           {expanded ? (
-            <span style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '1.3rem',
-              color: 'var(--text-primary)',
-              whiteSpace: 'nowrap',
-            }}>
-              AethoFlo
-            </span>
+            <img src="/logo-dark.svg" alt="AethoFlo" style={{ height: 28, width: 'auto' }} />
           ) : (
-            <span style={{ fontSize: 20, color: 'var(--accent)', fontWeight: 700, fontFamily: 'var(--font-display)' }}>A</span>
+            <img src="/favicon.svg" alt="AethoFlo" style={{ height: 26, width: 26 }} />
           )}
         </div>
 
@@ -83,8 +80,8 @@ export default function AppShell() {
                 borderRadius: 'var(--radius-md)',
                 fontSize: 14,
                 fontWeight: 500,
-                color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-                background: isActive ? 'var(--accent-light)' : 'transparent',
+                color: isActive ? '#C96B47' : 'rgba(255,255,255,0.55)',
+                background: isActive ? 'rgba(201,107,71,0.14)' : 'transparent',
                 textDecoration: 'none',
                 transition: 'all var(--duration-fast)',
                 justifyContent: expanded ? 'flex-start' : 'center',
@@ -100,15 +97,15 @@ export default function AppShell() {
         {/* User footer */}
         <div style={{
           padding: expanded ? '12px 16px' : '12px 8px',
-          borderTop: '1px solid var(--border-light)',
+          borderTop: `1px solid ${BORDER_COLOR}`,
           transition: 'padding 200ms cubic-bezier(0.4,0,0.2,1)',
         }}>
           {expanded && (
             <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.display_name}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
                 {user?.role}
               </div>
             </div>
@@ -119,7 +116,7 @@ export default function AppShell() {
             style={{
               width: '100%',
               justifyContent: expanded ? 'flex-start' : 'center',
-              color: 'var(--text-tertiary)',
+              color: 'rgba(255,255,255,0.35)',
               fontSize: 13,
             }}
           >

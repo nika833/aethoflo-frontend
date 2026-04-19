@@ -54,10 +54,7 @@ export default function SignupPage() {
         boxShadow: 'var(--shadow-lg)',
       }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)',
-            fontFamily: 'var(--font-display)', marginBottom: 6 }}>
-            AethoFlo
-          </div>
+          <img src="/logo.svg" alt="AethoFlo" style={{ height: 36, width: 'auto', marginBottom: 10 }} />
           <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
             Create your training workspace
           </p>
