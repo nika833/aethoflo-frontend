@@ -19,8 +19,9 @@ const LEARNER_NAV = [
 export default function AppShell() {
   const { user, clearAuth } = useAuthStore();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const nav = user?.role === 'admin' ? ADMIN_NAV : LEARNER_NAV;
+  const expanded = hovered;
 
   const handleLogout = () => {
     clearAuth();
@@ -30,25 +31,30 @@ export default function AppShell() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       {/* Sidebar */}
-      <aside style={{
-        width: collapsed ? 64 : 220,
-        background: 'var(--surface-2)',
-        borderRight: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column',
-        flexShrink: 0,
-        transition: 'width var(--duration-base) var(--ease-out)',
-        overflow: 'hidden',
-        position: 'sticky', top: 0, height: '100vh',
-      }}>
+      <aside
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: expanded ? 220 : 60,
+          background: 'var(--surface-2)',
+          borderRight: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column',
+          flexShrink: 0,
+          transition: 'width 200ms cubic-bezier(0.4,0,0.2,1)',
+          overflow: 'hidden',
+          position: 'sticky', top: 0, height: '100vh',
+        }}>
         {/* Logo */}
         <div style={{
-          padding: collapsed ? '20px 0' : '20px 20px',
+          padding: '20px 0',
           display: 'flex', alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'space-between',
+          justifyContent: expanded ? 'flex-start' : 'center',
+          paddingLeft: expanded ? 18 : 0,
           borderBottom: '1px solid var(--border-light)',
           minHeight: 64,
+          transition: 'padding 200ms cubic-bezier(0.4,0,0.2,1)',
         }}>
-          {!collapsed && (
+          {expanded ? (
             <span style={{
               fontFamily: 'var(--font-display)',
               fontSize: '1.3rem',
@@ -57,14 +63,9 @@ export default function AppShell() {
             }}>
               AethoFlo
             </span>
+          ) : (
+            <span style={{ fontSize: 20, color: 'var(--accent)', fontWeight: 700, fontFamily: 'var(--font-display)' }}>A</span>
           )}
-          <button
-            className="btn btn-ghost btn-icon"
-            onClick={() => setCollapsed((v) => !v)}
-            style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}
-          >
-            {collapsed ? '›' : '‹'}
-          </button>
         </div>
 
         {/* Nav links */}
@@ -78,7 +79,7 @@ export default function AppShell() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
-                padding: collapsed ? '10px' : '9px 12px',
+                padding: expanded ? '9px 12px' : '10px',
                 borderRadius: 'var(--radius-md)',
                 fontSize: 14,
                 fontWeight: 500,
@@ -86,22 +87,23 @@ export default function AppShell() {
                 background: isActive ? 'var(--accent-light)' : 'transparent',
                 textDecoration: 'none',
                 transition: 'all var(--duration-fast)',
-                justifyContent: collapsed ? 'center' : 'flex-start',
+                justifyContent: expanded ? 'flex-start' : 'center',
                 whiteSpace: 'nowrap',
               })}
             >
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-              {!collapsed && item.label}
+              <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1 }}>{item.icon}</span>
+              {expanded && item.label}
             </NavLink>
           ))}
         </nav>
 
         {/* User footer */}
         <div style={{
-          padding: collapsed ? '12px 8px' : '12px 16px',
+          padding: expanded ? '12px 16px' : '12px 8px',
           borderTop: '1px solid var(--border-light)',
+          transition: 'padding 200ms cubic-bezier(0.4,0,0.2,1)',
         }}>
-          {!collapsed && (
+          {expanded && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.display_name}
@@ -116,13 +118,13 @@ export default function AppShell() {
             onClick={handleLogout}
             style={{
               width: '100%',
-              justifyContent: collapsed ? 'center' : 'flex-start',
+              justifyContent: expanded ? 'flex-start' : 'center',
               color: 'var(--text-tertiary)',
               fontSize: 13,
             }}
           >
-            <span>↩</span>
-            {!collapsed && 'Sign out'}
+            <span style={{ fontSize: 18 }}>↩</span>
+            {expanded && 'Sign out'}
           </button>
         </div>
       </aside>
