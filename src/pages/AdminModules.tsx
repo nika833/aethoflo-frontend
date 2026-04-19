@@ -95,8 +95,14 @@ function ModuleEditor({
     }
   };
 
+  const MAX_SMART_BYTES = 24 * 1024 * 1024; // 24 MB — Railway gateway hard limit is 25 MB
+
   const runAnalysis = async (file: File) => {
     setAnalyzeError('');
+    if (file.size > MAX_SMART_BYTES) {
+      setAnalyzeError(`File too large (${(file.size / 1024 / 1024).toFixed(0)} MB). Please upload a file under 24 MB. For long videos, try trimming or exporting audio only.`);
+      return;
+    }
     setAnalyzing(true);
     try {
       const s = await analyzeApi.smartFill(file);
