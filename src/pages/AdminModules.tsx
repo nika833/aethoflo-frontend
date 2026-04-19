@@ -32,9 +32,11 @@ const SMART_ACCEPT = [
 ].join(',');
 
 // ─── Module Editor form ───────────────────────────────────────────────────────
+interface PendingMedia { key: string; originalName: string; mimeType: string; }
+
 function ModuleEditor({
   initial, domains: initialDomains, onSave, onCancel, saving, onDomainCreated, existingTitles,
-  onPendingChecklist,
+  onPendingChecklist, onPendingMedia,
 }: {
   initial?: Partial<ModuleSkill>;
   domains: Domain[];
@@ -44,6 +46,7 @@ function ModuleEditor({
   onDomainCreated?: (d: Domain) => void;
   existingTitles: string[];
   onPendingChecklist?: (items: string[]) => void;
+  onPendingMedia?: (pm: PendingMedia) => void;
 }) {
   const [form, setForm] = useState({
     title: initial?.title ?? '',
@@ -101,7 +104,7 @@ function ModuleEditor({
     setAnalyzeProgress(0);
     setAnalyzing(true);
     try {
-      const s = await analyzeApi.smartFill(file, setAnalyzeProgress);
+      const { suggestions: s, pendingMedia } = await analyzeApi.smartFill(file, setAnalyzeProgress);
       setForm((f) => ({
         title: s.title || f.title,
         domain_id: f.domain_id,
@@ -112,6 +115,7 @@ function ModuleEditor({
       }));
       setAiFields(new Set(['title', 'objective', 'why_it_matters', 'context_note', 'what_to_do']));
       if (s.checklist_items?.length) onPendingChecklist?.(s.checklist_items);
+      if (pendingMedia) onPendingMedia?.(pendingMedia);
 
       // Auto-suggest domain if no domain selected
       if (!form.domain_id && s.domain_suggestion) {
@@ -400,6 +404,7 @@ export default function AdminModules() {
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [pendingChecklist, setPendingChecklist] = useState<string[]>([]);
+  const [pendingSmartMedia, setPendingSmartMedia] = useState<PendingMedia | null>(null);
   const [panel, setPanel] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<ModuleSkill | null>(null);
   const [expandedChecklist, setExpandedChecklist] = useState<string | null>(null);
@@ -420,9 +425,15 @@ export default function AdminModules() {
     try {
       const created = await moduleSkillsApi.create(d);
       setModules((prev) => [...prev, created]);
+      // Auto-attach smart fill file as media (server copies R2 → S3, no re-upload needed)
+      if (pendingSmartMedia) {
+        try {
+          await analyzeApi.registerMedia(pendingSmartMedia.key, created.id, pendingSmartMedia.originalName, pendingSmartMedia.mimeType);
+        } catch { /* non-fatal — media attach failed but module was created */ }
+        setPendingSmartMedia(null);
+      }
       setEditing(created);
       setPanel('edit');
-      // pendingChecklist was set by SmartFill — ChecklistSection will consume it
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
         ?? (err as Error)?.message ?? 'Could not create module.';
@@ -572,7 +583,8 @@ export default function AdminModules() {
           onCancel={closePanel} saving={saving}
           existingTitles={moduleTitles}
           onDomainCreated={(d) => setDomains((prev) => [...prev, d])}
-          onPendingChecklist={setPendingChecklist} />
+          onPendingChecklist={setPendingChecklist}
+          onPendingMedia={setPendingSmartMedia} />
       </SlideOver>
 
       {/* Edit panel */}

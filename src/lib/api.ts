@@ -118,9 +118,8 @@ export const mediaApi = {
 
 export const analyzeApi = {
   smartFill: async (file: File, onProgress?: (pct: number) => void): Promise<{
-    title: string; objective: string; why_it_matters: string;
-    what_to_do: string; context_note: string | null;
-    checklist_items: string[]; domain_suggestion: string | null;
+    suggestions: { title: string; objective: string; why_it_matters: string; what_to_do: string; context_note: string | null; checklist_items: string[]; domain_suggestion: string | null; };
+    pendingMedia?: { key: string; originalName: string; mimeType: string };
   }> => {
     const base = import.meta.env.VITE_API_URL ?? '';
     const token = localStorage.getItem('aethoflo_token');
@@ -175,7 +174,22 @@ export const analyzeApi = {
     }
     onProgress?.(100);
     const data = await analyzeRes.json();
-    return data.suggestions;
+    return { suggestions: data.suggestions, pendingMedia: data.pendingMedia };
+  },
+
+  registerMedia: async (r2Key: string, moduleId: string, originalName: string, mimeType: string) => {
+    const base = import.meta.env.VITE_API_URL ?? '';
+    const token = localStorage.getItem('aethoflo_token');
+    const res = await fetch(`${base}/api/analyze/register-media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ r2Key, moduleId, originalName, mimeType }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error ?? 'Failed to attach media');
+    }
+    return res.json();
   },
 };
 
