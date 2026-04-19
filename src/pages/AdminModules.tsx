@@ -528,6 +528,8 @@ function ChecklistSection({ moduleId, autoItems, refreshKey }: { moduleId: strin
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [newItemLabel, setNewItemLabel] = useState<Record<string, string>>({});
+  const [bulkText, setBulkText] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
   const autoCreated = useRef(false);
 
   useEffect(() => {
@@ -550,9 +552,11 @@ function ChecklistSection({ moduleId, autoItems, refreshKey }: { moduleId: strin
     }).finally(() => setLoading(false));
   }, [moduleId, refreshKey]);
 
-  const createTemplate = async () => {
+  const getOrCreateTemplate = async () => {
+    if (templates.length > 0) return templates[0];
     const t = await checklistsApi.createTemplate(moduleId, { title: 'Completion Checklist' });
-    setTemplates((prev) => [...prev, t]);
+    setTemplates([{ ...t, items: [] }]);
+    return t;
   };
 
   const addItem = async (templateId: string) => {
@@ -567,6 +571,27 @@ function ChecklistSection({ moduleId, autoItems, refreshKey }: { moduleId: strin
     setNewItemLabel((p) => ({ ...p, [templateId]: '' }));
   };
 
+  const bulkAdd = async () => {
+    const lines = bulkText.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (!lines.length) return;
+    setBulkSaving(true);
+    try {
+      const t = await getOrCreateTemplate();
+      const existingCount = t.items?.length ?? 0;
+      const items = await Promise.all(
+        lines.map((label, i) =>
+          checklistsApi.addItem(t.id, { label, item_type: 'checkbox', is_required: true, display_order: existingCount + i })
+        )
+      );
+      setTemplates((prev) => prev.map((x) =>
+        x.id === t.id ? { ...x, items: [...(x.items || []), ...items] } : x
+      ));
+      setBulkText('');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
   const removeItem = async (templateId: string, itemId: string) => {
     await checklistsApi.deleteItem(itemId);
     setTemplates((prev) => prev.map((t) =>
@@ -575,21 +600,20 @@ function ChecklistSection({ moduleId, autoItems, refreshKey }: { moduleId: strin
 
   if (loading) return <div style={{ padding: 16 }}><Spinner size={16} /></div>;
 
+  const hasItems = templates.some((t) => t.items?.length > 0);
+
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Existing items */}
       {templates.map((t) => (
-        <div key={t.id} style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 10 }}>
-            {t.title}
-          </div>
+        <div key={t.id}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
             {(t.items || []).map((item) => (
               <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8,
                 padding: '8px 12px', background: 'var(--surface-2)',
                 borderRadius: 'var(--radius-md)', fontSize: 14 }}>
+                <span style={{ fontSize: 16, color: 'var(--text-tertiary)' }}>☐</span>
                 <span style={{ flex: 1, color: 'var(--text-primary)' }}>{item.label}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', background: 'var(--surface-3)',
-                  padding: '2px 6px', borderRadius: 4 }}>{item.item_type}</span>
                 <button className="btn btn-ghost btn-icon"
                   style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '4px 8px' }}
                   onClick={() => removeItem(t.id, item.id)}>✕</button>
@@ -601,15 +625,36 @@ function ChecklistSection({ moduleId, autoItems, refreshKey }: { moduleId: strin
               value={newItemLabel[t.id] ?? ''}
               onChange={(e) => setNewItemLabel((p) => ({ ...p, [t.id]: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && addItem(t.id)}
-              placeholder="Add checklist item..." />
+              placeholder="Add a step…" />
             <button className="btn btn-secondary btn-sm" onClick={() => addItem(t.id)}>Add</button>
           </div>
         </div>
       ))}
-      {templates.length === 0 && (
-        <button className="btn btn-secondary btn-sm" onClick={createTemplate}>
-          + Add checklist
-        </button>
+
+      {/* Bulk add — shown when no items exist yet */}
+      {!hasItems && (
+        <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius-md)', padding: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            Paste your steps — one per line
+          </div>
+          <textarea
+            className="form-textarea"
+            rows={5}
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            placeholder={"Review case file\nContact family\nPrepare data sheets\n…"}
+            style={{ marginBottom: 10, fontSize: 13 }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!bulkText.trim() || bulkSaving}
+              onClick={bulkAdd}
+            >
+              {bulkSaving ? <Spinner size={13} /> : 'Save checklist'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
