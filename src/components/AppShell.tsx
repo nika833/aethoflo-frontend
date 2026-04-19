@@ -16,7 +16,7 @@ const LEARNER_NAV = [
   { to: '/learner/progress', label: 'Progress',    icon: '◉' },
 ];
 
-const SIDEBAR_BG = '#1E1512';
+const SIDEBAR_BG = '#3A2215';
 const BORDER_COLOR = 'rgba(255,255,255,0.08)';
 
 export default function AppShell() {
@@ -59,7 +59,7 @@ export default function AppShell() {
           transition: 'padding 200ms cubic-bezier(0.4,0,0.2,1)',
         }}>
           {expanded ? (
-            <img src="/logo-dark.svg" alt="AethoFlo" style={{ height: 28, width: 'auto' }} />
+            <img src="/logo-dark.svg" alt="AethoFlo" style={{ height: 40, width: 'auto' }} />
           ) : (
             <img src="/favicon.svg" alt="AethoFlo" style={{ height: 26, width: 26 }} />
           )}
