@@ -1,415 +1,376 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor,
-  useSensor, useSensors, DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove, SortableContext, sortableKeyboardCoordinates,
-  verticalListSortingStrategy, useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { roadmapsApi, moduleSkillsApi } from '../lib/api';
-import { Modal, EmptyState, PageHeader, Alert, Spinner, SimilarityWarning } from '../components/ui';
+import React, { useEffect, useState } from 'react';
+import { roadmapsApi, domainsApi, moduleSkillsApi } from '../lib/api';
+import { PageHeader, EmptyState, Spinner, Alert } from '../components/ui';
 
-interface ModuleSkill { id: string; title: string; domain_name: string | null; }
-interface RoadmapModule {
-  id: string; module_skill_id: string; display_order: number;
-  title: string; domain_name: string | null;
-  release_rule: string; release_days: number | null; release_date: string | null;
-}
 interface Roadmap {
-  id: string; title: string; description: string | null;
-  target_audience: string | null; duration_label: string | null;
-  is_active: boolean; module_count: number;
+  id: string; title: string; target_audience: string | null;
+  duration_label: string | null; module_count: number; is_active: boolean;
+}
+interface Domain { id: string; name: string; display_order: number; }
+interface ModuleSkill { id: string; title: string; domain_id: string | null; domain_name: string | null; }
+interface GridModule {
+  id: string; module_skill_id: string; title: string;
+  week_number: number; module_domain_id: string | null; domain_name: string | null;
 }
 
-// ─── Sortable module row ──────────────────────────────────────────────────────
-function SortableModuleRow({
-  mod, onUpdateRule, onRemove,
-}: {
-  mod: RoadmapModule;
-  onUpdateRule: (id: string, rule: string, days: number | null, date: string | null) => void;
-  onRemove: (id: string) => void;
+const MAX_PER_WEEK = 4;
+const MIN_WEEKS = 6;
+const COL_W = 165;
+const WEEK_W = 68;
+
+function ModuleChip({ mod, repeatCount, onRemove, onDragStart }: {
+  mod: GridModule; repeatCount: number;
+  onRemove: () => void; onDragStart: (e: React.DragEvent) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: mod.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 1 : 0,
-  };
-
   return (
-    <div ref={setNodeRef} style={style}>
-      <div className="card" style={{ padding: '12px 16px', display: 'flex',
-        alignItems: 'center', gap: 12, marginBottom: 6 }}>
-        {/* Drag handle */}
-        <div {...attributes} {...listeners}
-          style={{ cursor: 'grab', color: 'var(--text-tertiary)', fontSize: 18,
-            lineHeight: 1, flexShrink: 0, userSelect: 'none' }}>
-          ⠿
+    <div
+      draggable onDragStart={onDragStart}
+      onDoubleClick={(e) => { e.stopPropagation(); onRemove(); }}
+      title="Drag to move · Double-click to remove"
+      style={{
+        background: '#fff', border: '1px solid var(--border)', borderRadius: 7,
+        padding: '5px 8px', fontSize: 12, fontWeight: 500, color: 'var(--text-primary)',
+        cursor: 'grab', userSelect: 'none',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        display: 'flex', alignItems: 'flex-start', gap: 4,
+      }}
+    >
+      <span style={{ flex: 1, lineHeight: 1.35 }}>{mod.title}</span>
+      {repeatCount > 1 && (
+        <span style={{
+          background: 'var(--accent)', color: '#fff', fontSize: 10, fontWeight: 700,
+          borderRadius: 10, padding: '1px 5px', flexShrink: 0, marginTop: 1,
+        }}>{repeatCount}×</span>
+      )}
+    </div>
+  );
+}
+
+function ModulePicker({ domainId, domainName, modules, onPick, onClose }: {
+  domainId: string | null; domainName: string;
+  modules: ModuleSkill[]; onPick: (m: ModuleSkill) => void; onClose: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const filtered = modules.filter((m) =>
+    (domainId === null || m.domain_id === domainId) &&
+    m.title.toLowerCase().includes(search.toLowerCase())
+  );
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.22)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+        width: 340, maxHeight: 420, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border-light)' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Add to Week — {domainName}</div>
+          <input className="form-input" style={{ fontSize: 13 }} autoFocus
+            placeholder="Search modules…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--text-primary)' }}>
-            {mod.title}
-          </div>
-          {mod.domain_name && (
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{mod.domain_name}</div>
-          )}
-        </div>
-
-        {/* Release rule selector */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-          <select
-            className="form-select form-input"
-            style={{ width: 160, padding: '6px 10px', fontSize: 13 }}
-            value={mod.release_rule}
-            onChange={(e) => onUpdateRule(mod.id, e.target.value, mod.release_days, mod.release_date)}
-          >
-            <option value="immediate">Immediate</option>
-            <option value="days_offset">After N days</option>
-            <option value="after_previous">After previous</option>
-            <option value="fixed_date">Fixed date</option>
-          </select>
-
-          {mod.release_rule === 'days_offset' && (
-            <input type="number" className="form-input" min={1}
-              style={{ width: 72, padding: '6px 10px', fontSize: 13 }}
-              value={mod.release_days ?? ''}
-              onChange={(e) => onUpdateRule(mod.id, mod.release_rule, parseInt(e.target.value) || null, null)}
-              placeholder="days"
-            />
-          )}
-
-          {mod.release_rule === 'fixed_date' && (
-            <input type="date" className="form-input"
-              style={{ width: 148, padding: '6px 10px', fontSize: 13 }}
-              value={mod.release_date ?? ''}
-              onChange={(e) => onUpdateRule(mod.id, mod.release_rule, null, e.target.value || null)}
-            />
-          )}
-
-          <button className="btn btn-ghost btn-icon"
-            style={{ color: 'var(--text-tertiary)', fontSize: 16, flexShrink: 0 }}
-            onClick={() => onRemove(mod.id)}>✕</button>
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {filtered.length === 0
+            ? <div style={{ padding: 20, textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)' }}>No modules found</div>
+            : filtered.map((m) => (
+              <button key={m.id} onClick={() => onPick(m)} style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                padding: '10px 16px', background: 'none', border: 'none',
+                borderBottom: '1px solid var(--border-light)', cursor: 'pointer',
+              }}
+                onMouseOver={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+                onMouseOut={(e) => (e.currentTarget.style.background = 'none')}
+              >
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{m.title}</div>
+                {m.domain_name && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{m.domain_name}</div>}
+              </button>
+            ))}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Roadmap detail / builder panel ──────────────────────────────────────────
-function RoadmapBuilder({
-  roadmap, onClose,
-}: {
-  roadmap: Roadmap;
-  onClose: () => void;
-}) {
-  const [modules, setModules] = useState<RoadmapModule[]>([]);
-  const [allModules, setAllModules] = useState<ModuleSkill[]>([]);
+function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void }) {
+  const [gridModules, setGridModules] = useState<GridModule[]>([]);
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [library, setLibrary] = useState<ModuleSkill[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [addingId, setAddingId] = useState('');
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const [weekCount, setWeekCount] = useState(MIN_WEEKS);
+  const [picker, setPicker] = useState<{ week: number; domainId: string | null; domainName: string } | null>(null);
+  const [dragSource, setDragSource] = useState<{ rmId: string } | null>(null);
+  const [dragTarget, setDragTarget] = useState<{ week: number; domainId: string | null } | null>(null);
+  const [libraryDrag, setLibraryDrag] = useState<ModuleSkill | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      roadmapsApi.get(roadmap.id),
-      moduleSkillsApi.list(),
-    ]).then(([r, mods]) => {
-      setModules(r.modules ?? []);
-      setAllModules(mods);
-    }).finally(() => setLoading(false));
+    Promise.all([roadmapsApi.get(roadmap.id), domainsApi.list(), moduleSkillsApi.list()])
+      .then(([rm, doms, mods]) => {
+        const mList: GridModule[] = (rm.modules || []).map((m: Record<string, unknown>) => ({
+          id: m.id as string,
+          module_skill_id: m.module_skill_id as string,
+          title: m.title as string,
+          week_number: (m.week_number as number) || 1,
+          module_domain_id: (m.module_domain_id as string | null) ?? null,
+          domain_name: (m.domain_name as string | null) ?? null,
+        }));
+        setGridModules(mList);
+        setDomains((doms as Domain[]).sort((a, b) => a.display_order - b.display_order));
+        setLibrary(mods as ModuleSkill[]);
+        const maxWeek = mList.length ? Math.max(...mList.map((m) => m.week_number)) : 0;
+        setWeekCount(Math.max(MIN_WEEKS, maxWeek + 2));
+      }).finally(() => setLoading(false));
   }, [roadmap.id]);
 
-  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  const columns: { id: string | null; name: string }[] = [
+    ...domains.map((d) => ({ id: d.id, name: d.name })),
+    { id: null, name: 'No domain' },
+  ];
+  const weeks = Array.from({ length: weekCount }, (_, i) => i + 1);
+  const modulesPerWeek = (w: number) => gridModules.filter((m) => m.week_number === w).length;
+  const repeatCount = (skillId: string) => gridModules.filter((m) => m.module_skill_id === skillId).length;
+  const usedSkillIds = new Set(gridModules.map((m) => m.module_skill_id));
+  const unassigned = library.filter((m) => !usedSkillIds.has(m.id));
 
-    const oldIndex = modules.findIndex((m) => m.id === active.id);
-    const newIndex = modules.findIndex((m) => m.id === over.id);
-    const reordered = arrayMove(modules, oldIndex, newIndex);
-    const withOrder = reordered.map((m, i) => ({ ...m, display_order: i }));
-    setModules(withOrder);
-
+  const addModule = async (mod: ModuleSkill, week: number) => {
+    setPicker(null);
     try {
-      await roadmapsApi.reorderModules(roadmap.id,
-        withOrder.map((m) => ({ id: m.id, display_order: m.display_order })));
-    } catch { setError('Reorder failed. Please try again.'); }
-  }, [modules, roadmap.id]);
-
-  const handleAddModule = async () => {
-    if (!addingId) return;
-    setSaving(true);
-    try {
-      const newMod = await roadmapsApi.addModule(roadmap.id, {
-        module_skill_id: addingId,
-        display_order: modules.length,
-        release_rule: 'immediate',
+      const created = await roadmapsApi.addModule(roadmap.id, {
+        module_skill_id: mod.id, week_number: week,
+        display_order: modulesPerWeek(week), release_rule: 'immediate',
       });
-      const skill = allModules.find((m) => m.id === addingId);
-      setModules((prev) => [...prev, { ...newMod, title: skill?.title ?? '', domain_name: skill?.domain_name ?? null }]);
-      setAddingId('');
+      setGridModules((prev) => [...prev, {
+        id: created.id, module_skill_id: created.module_skill_id,
+        title: created.title || mod.title, week_number: created.week_number || week,
+        module_domain_id: created.module_domain_id ?? mod.domain_id,
+        domain_name: created.domain_name ?? mod.domain_name,
+      }]);
     } catch { setError('Could not add module.'); }
-    finally { setSaving(false); }
   };
 
-  const handleUpdateRule = async (modId: string, rule: string, days: number | null, date: string | null) => {
-    setModules((prev) => prev.map((m) =>
-      m.id === modId ? { ...m, release_rule: rule, release_days: days, release_date: date } : m));
+  const removeModule = async (rmId: string) => {
+    if (!confirm('Remove this module from the roadmap?')) return;
     try {
-      await roadmapsApi.updateModule(roadmap.id, modId, {
-        release_rule: rule,
-        release_days: days,
-        release_date: date,
-      });
-    } catch { setError('Could not update release rule.'); }
-  };
-
-  const handleRemove = async (modId: string) => {
-    setModules((prev) => prev.filter((m) => m.id !== modId));
-    try {
-      await roadmapsApi.removeModule(roadmap.id, modId);
+      await roadmapsApi.removeModule(roadmap.id, rmId);
+      setGridModules((prev) => prev.filter((m) => m.id !== rmId));
     } catch { setError('Could not remove module.'); }
   };
 
-  const unusedModules = allModules.filter(
-    (m) => !modules.some((rm) => rm.module_skill_id === m.id)
-  );
-
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner size={24} /></div>;
-
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h3 style={{ marginBottom: 2 }}>{roadmap.title}</h3>
-          {roadmap.target_audience && (
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>For: {roadmap.target_audience}</span>
-          )}
-        </div>
-        <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ color: 'var(--text-tertiary)' }}>
-          ← Back to list
-        </button>
-      </div>
-
-      {error && <div style={{ marginBottom: 14 }}><Alert type="error">{error}</Alert></div>}
-
-      {/* Add module */}
-      <div style={{ marginBottom: 20, display: 'flex', gap: 8, padding: '14px 16px',
-        background: 'var(--surface-2)', borderRadius: 'var(--radius-md)',
-        border: '1px solid var(--border-light)' }}>
-        <select className="form-select form-input" style={{ flex: 1 }}
-          value={addingId} onChange={(e) => setAddingId(e.target.value)}>
-          <option value="">— Select a module to add —</option>
-          {unusedModules.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.domain_name ? `[${m.domain_name}] ` : ''}{m.title}
-            </option>
-          ))}
-        </select>
-        <button className="btn btn-primary" disabled={!addingId || saving}
-          onClick={handleAddModule}>
-          {saving ? <Spinner size={16} /> : '+ Add'}
-        </button>
-      </div>
-
-      {/* Drag-drop module list */}
-      {modules.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-tertiary)', fontSize: 14 }}>
-          Add modules above to begin building this roadmap.
-        </div>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={modules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-            {modules.map((mod) => (
-              <SortableModuleRow key={mod.id} mod={mod}
-                onUpdateRule={handleUpdateRule} onRemove={handleRemove} />
-            ))}
-          </SortableContext>
-        </DndContext>
-      )}
-
-      <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-tertiary)' }}>
-        {modules.length} module{modules.length !== 1 ? 's' : ''} · Drag to reorder
-      </div>
-    </div>
-  );
-}
-
-// ─── Roadmap form ─────────────────────────────────────────────────────────────
-function RoadmapForm({
-  initial, onSave, onCancel, saving, existingTitles,
-}: {
-  initial?: Partial<Roadmap>;
-  onSave: (d: Record<string, unknown>) => void;
-  onCancel: () => void;
-  saving: boolean;
-  existingTitles: string[];
-}) {
-  const [form, setForm] = useState({
-    title: initial?.title ?? '',
-    description: initial?.description ?? '',
-    target_audience: initial?.target_audience ?? '',
-    duration_label: initial?.duration_label ?? '',
-  });
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const otherTitles = existingTitles.filter((t) => t !== initial?.title);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="form-group">
-        <label className="form-label">Title <span style={{ color: 'var(--accent)' }}>*</span></label>
-        <input className="form-input" value={form.title} autoFocus
-          onChange={(e) => set('title', e.target.value)} placeholder="e.g. New Staff Onboarding" />
-        <SimilarityWarning value={form.title} existing={otherTitles} />
-      </div>
-      <div className="form-group">
-        <label className="form-label">Description</label>
-        <textarea className="form-textarea" value={form.description}
-          onChange={(e) => set('description', e.target.value)} rows={2}
-          placeholder="Brief description of this roadmap..." />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <div className="form-group">
-          <label className="form-label">Target audience</label>
-          <input className="form-input" value={form.target_audience}
-            onChange={(e) => set('target_audience', e.target.value)}
-            placeholder="e.g. New RBTs" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Duration label</label>
-          <input className="form-input" value={form.duration_label}
-            onChange={(e) => set('duration_label', e.target.value)}
-            placeholder="e.g. 8 weeks" />
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary" disabled={!form.title.trim() || saving}
-          onClick={() => onSave({
-            title: form.title.trim(),
-            description: form.description.trim() || null,
-            target_audience: form.target_audience.trim() || null,
-            duration_label: form.duration_label.trim() || null,
-          })}>
-          {saving ? <Spinner size={16} /> : (initial?.id ? 'Save changes' : 'Create roadmap')}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main page ────────────────────────────────────────────────────────────────
-export default function AdminRoadmaps() {
-  const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [modal, setModal] = useState<'create' | 'edit' | null>(null);
-  const [editing, setEditing] = useState<Roadmap | null>(null);
-  const [building, setBuilding] = useState<Roadmap | null>(null);
-
-  const load = () => roadmapsApi.list().then(setRoadmaps).finally(() => setLoading(false));
-  useEffect(() => { load(); }, []);
-
-  const handleCreate = async (d: Record<string, unknown>) => {
-    setSaving(true); setError('');
-    try {
-      const created = await roadmapsApi.create(d);
-      const r = { ...created, module_count: 0 };
-      setRoadmaps((prev) => [r, ...prev]);
-      setModal(null);
-      setBuilding(r);
-    } catch { setError('Could not create roadmap.'); }
-    finally { setSaving(false); }
-  };
-
-  const handleEdit = async (d: Record<string, unknown>) => {
-    if (!editing) return;
-    setSaving(true); setError('');
-    try {
-      const updated = await roadmapsApi.update(editing.id, d);
-      setRoadmaps((prev) => prev.map((r) => r.id === editing.id ? { ...r, ...updated } : r));
-      setModal(null); setEditing(null);
-    } catch { setError('Could not update roadmap.'); }
-    finally { setSaving(false); }
+  const moveModule = async (rmId: string, toWeek: number) => {
+    setGridModules((prev) => prev.map((m) => m.id === rmId ? { ...m, week_number: toWeek } : m));
+    setDragSource(null); setDragTarget(null); setLibraryDrag(null);
+    try { await roadmapsApi.updateModule(roadmap.id, rmId, { week_number: toWeek }); }
+    catch { setError('Could not move module.'); }
   };
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={28} /></div>;
 
-  // Builder view
-  if (building) {
-    return (
-      <div className="animate-fade-up">
-        <RoadmapBuilder roadmap={building} onClose={() => { setBuilding(null); load(); }} />
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontWeight: 700, fontSize: 22, marginBottom: 3 }}>{roadmap.title}</h2>
+          {roadmap.target_audience && <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>For: {roadmap.target_audience}</div>}
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>← Back to list</button>
       </div>
-    );
-  }
+
+      {error && <div style={{ marginBottom: 12 }}><Alert type="error">{error}</Alert></div>}
+
+      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10 }}>
+        Click any cell to add · Drag to reposition · Double-click a module to remove · {MAX_PER_WEEK} modules per week max
+      </div>
+
+      <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: WEEK_W + columns.length * COL_W }}>
+          <thead>
+            <tr>
+              <th style={{
+                width: WEEK_W, padding: '10px 12px', background: 'var(--surface-2)',
+                borderBottom: '2px solid var(--border)', borderRight: '1px solid var(--border)',
+                fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700,
+                textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.06em',
+              }}>Week</th>
+              {columns.map((col) => (
+                <th key={col.id ?? '_null'} style={{
+                  padding: '10px 14px', background: 'var(--surface-2)',
+                  borderBottom: '2px solid var(--border)', borderRight: '1px solid var(--border-light)',
+                  fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'left',
+                }}>{col.name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {weeks.map((week) => {
+              const total = modulesPerWeek(week);
+              const over = total > MAX_PER_WEEK;
+              return (
+                <tr key={week}>
+                  <td style={{
+                    padding: '8px 10px', borderRight: '1px solid var(--border)',
+                    borderBottom: '1px solid var(--border-light)', verticalAlign: 'top',
+                    background: over ? '#FEF3C7' : 'var(--surface-2)',
+                    fontSize: 13, fontWeight: 600,
+                    color: over ? '#92400E' : 'var(--text-secondary)',
+                  }}>
+                    <div>{week}</div>
+                    {over && <div style={{ fontSize: 10, color: '#D97706', marginTop: 3, fontWeight: 700 }}>⚠ {total}</div>}
+                  </td>
+                  {columns.map((col) => {
+                    const cellMods = gridModules.filter(
+                      (m) => m.week_number === week && m.module_domain_id === col.id
+                    );
+                    const isTarget = dragTarget?.week === week && dragTarget?.domainId === col.id;
+                    return (
+                      <td key={col.id ?? '_null'}
+                        onClick={() => { if (!dragSource && !libraryDrag) setPicker({ week, domainId: col.id, domainName: col.name }); }}
+                        onDragOver={(e) => { e.preventDefault(); setDragTarget({ week, domainId: col.id }); }}
+                        onDragLeave={() => setDragTarget(null)}
+                        onDrop={(e) => {
+                          e.preventDefault(); setDragTarget(null);
+                          if (libraryDrag) { addModule(libraryDrag, week); setLibraryDrag(null); }
+                          else if (dragSource) moveModule(dragSource.rmId, week);
+                        }}
+                        style={{
+                          padding: 6, verticalAlign: 'top', cursor: 'pointer',
+                          borderRight: '1px solid var(--border-light)',
+                          borderBottom: '1px solid var(--border-light)',
+                          background: isTarget ? 'var(--accent-light)' : over ? '#FFFBEB' : 'transparent',
+                          transition: 'background 100ms', minWidth: COL_W,
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 68 }}>
+                          {cellMods.map((mod) => (
+                            <ModuleChip key={mod.id} mod={mod} repeatCount={repeatCount(mod.module_skill_id)}
+                              onRemove={() => removeModule(mod.id)}
+                              onDragStart={(e) => { e.stopPropagation(); setDragSource({ rmId: mod.id }); }}
+                            />
+                          ))}
+                          {cellMods.length === 0 && !isTarget && (
+                            <div style={{ height: 68, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ fontSize: 20, color: 'var(--border)' }}>+</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <button className="btn btn-ghost btn-sm" style={{ marginTop: 10, color: 'var(--text-tertiary)' }}
+        onClick={() => setWeekCount((w) => w + 4)}>+ Add 4 weeks</button>
+
+      {unassigned.length > 0 && (
+        <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            Unassigned modules
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>drag onto the grid to place</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {unassigned.map((mod) => (
+              <div key={mod.id} draggable
+                onDragStart={() => setLibraryDrag(mod)}
+                onDragEnd={() => setLibraryDrag(null)}
+                style={{
+                  background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
+                  padding: '6px 12px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                  cursor: 'grab', userSelect: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  opacity: libraryDrag?.id === mod.id ? 0.4 : 1,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                {mod.title}
+                {mod.domain_name && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{mod.domain_name}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {picker && (
+        <ModulePicker domainId={picker.domainId} domainName={picker.domainName}
+          modules={library} onPick={(m) => addModule(m, picker.week)} onClose={() => setPicker(null)} />
+      )}
+    </div>
+  );
+}
+
+export default function AdminRoadmaps() {
+  const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newAudience, setNewAudience] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<Roadmap | null>(null);
+
+  useEffect(() => { roadmapsApi.list().then(setRoadmaps).finally(() => setLoading(false)); }, []);
+
+  const handleCreate = async () => {
+    if (!newTitle.trim()) return;
+    setSaving(true);
+    try {
+      const created = await roadmapsApi.create({ title: newTitle.trim(), target_audience: newAudience.trim() || null, is_active: true });
+      const rm = { ...created, module_count: 0 };
+      setRoadmaps((prev) => [rm, ...prev]);
+      setSelected(rm);
+      setCreating(false); setNewTitle(''); setNewAudience('');
+    } catch { setError('Could not create roadmap.'); }
+    finally { setSaving(false); }
+  };
+
+  if (selected) return <RoadmapGrid roadmap={selected} onBack={() => setSelected(null)} />;
+  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={28} /></div>;
 
   return (
     <div className="animate-fade-up">
-      <PageHeader
-        title="Roadmaps"
-        subtitle="Structured learning paths with sequenced modules"
-        action={
-          <button className="btn btn-primary" onClick={() => setModal('create')}>
-            + New roadmap
-          </button>
-        }
-      />
+      <PageHeader title="Roadmaps" subtitle="Training sequences assigned to learners"
+        action={<button className="btn btn-primary" onClick={() => setCreating(true)}>+ New roadmap</button>} />
 
       {error && <div style={{ marginBottom: 16 }}><Alert type="error">{error}</Alert></div>}
 
-      {roadmaps.length === 0 ? (
+      {creating && (
+        <div className="card card-padded" style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <input className="form-input" autoFocus placeholder="Roadmap title…" value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreate()} />
+            <input className="form-input" placeholder="Target audience (e.g. BCBA, BT)…"
+              value={newAudience} onChange={(e) => setNewAudience(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary btn-sm" disabled={!newTitle.trim() || saving}
+                onClick={handleCreate}>{saving ? <Spinner size={14} /> : 'Create'}</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setCreating(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {roadmaps.length === 0 && !creating ? (
         <EmptyState icon="⟶" title="No roadmaps yet"
-          description="Create a roadmap to sequence modules into a learning path."
-          action={<button className="btn btn-primary" onClick={() => setModal('create')}>Create first roadmap</button>}
-        />
+          description="Create a roadmap and build a weekly training grid for your learners."
+          action={<button className="btn btn-primary" onClick={() => setCreating(true)}>Create first roadmap</button>} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {roadmaps.map((r) => (
-            <div key={r.id} className="card" style={{ padding: '16px 20px',
-              display: 'flex', alignItems: 'center', gap: 14 }}>
+          {roadmaps.map((rm) => (
+            <div key={rm.id} className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)',
-                  marginBottom: 2 }}>{r.title}</div>
-                <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {r.target_audience && <span>For: {r.target_audience}</span>}
-                  {r.duration_label && <span>· {r.duration_label}</span>}
-                  <span>· {r.module_count} module{r.module_count !== 1 ? 's' : ''}</span>
+                <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 3 }}>{rm.title}</div>
+                <div style={{ display: 'flex', gap: 12, fontSize: 13, color: 'var(--text-tertiary)' }}>
+                  {rm.target_audience && <span>For: {rm.target_audience}</span>}
+                  <span>{rm.module_count} module{rm.module_count !== 1 ? 's' : ''}</span>
+                  {rm.module_count === 0 && <span style={{ color: '#D97706' }}>⚠ No modules yet</span>}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-primary btn-sm"
-                  onClick={() => setBuilding(r)}>Build →</button>
-                <button className="btn btn-secondary btn-sm"
-                  onClick={() => { setEditing(r); setModal('edit'); }}>Edit</button>
-              </div>
+              <button className="btn btn-primary btn-sm" onClick={() => setSelected(rm)}>Build →</button>
             </div>
           ))}
         </div>
       )}
-
-      <Modal isOpen={modal === 'create'} onClose={() => setModal(null)} title="New roadmap" width={520}>
-        <RoadmapForm onSave={handleCreate} onCancel={() => setModal(null)} saving={saving}
-          existingTitles={roadmaps.map((r) => r.title)} />
-      </Modal>
-      <Modal isOpen={modal === 'edit'} onClose={() => { setModal(null); setEditing(null); }}
-        title="Edit roadmap" width={520}>
-        {editing && (
-          <RoadmapForm initial={editing} onSave={handleEdit}
-            onCancel={() => { setModal(null); setEditing(null); }} saving={saving}
-            existingTitles={roadmaps.map((r) => r.title)} />
-        )}
-      </Modal>
     </div>
   );
 }
