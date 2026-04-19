@@ -675,6 +675,16 @@ export default function AdminModules() {
   const [panel, setPanel] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<ModuleSkill | null>(null);
   const [filterDomain, setFilterDomain] = useState('');
+  const [expandedIssues, setExpandedIssues] = useState<string | null>(null);
+
+  const getIssues = (mod: ModuleSkill): string[] => {
+    const issues: string[] = [];
+    if (!mod.domain_id) issues.push('No domain assigned');
+    if (!mod.objective) issues.push('Missing objective');
+    if (mod.checklist_count === 0) issues.push('No completion checklist');
+    if (mod.media_count === 0) issues.push('No media attached');
+    return issues;
+  };
 
   const load = () => Promise.all([
     moduleSkillsApi.list(filterDomain || undefined),
@@ -815,8 +825,19 @@ export default function AdminModules() {
             <div key={mod.id} className="card" style={{ overflow: 'hidden' }}>
               <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)',
-                    marginBottom: 2 }}>{mod.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)' }}>{mod.title}</div>
+                    {getIssues(mod).length > 0 && (
+                      <button
+                        onClick={() => setExpandedIssues(expandedIssues === mod.id ? null : mod.id)}
+                        title="Incomplete — click for details"
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+                          fontSize: 15, lineHeight: 1, color: '#D97706',
+                        }}
+                      >⚠</button>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     {mod.domain_name && (
                       <span style={{ fontSize: 12, color: 'var(--accent-dark)',
@@ -847,6 +868,33 @@ export default function AdminModules() {
                 </div>
               </div>
 
+              {expandedIssues === mod.id && getIssues(mod).length > 0 && (
+                <div style={{
+                  borderTop: '1px solid #FDE68A',
+                  background: '#FFFBEB',
+                  padding: '10px 20px',
+                  display: 'flex', gap: 16, flexWrap: 'wrap',
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#92400E', marginRight: 4 }}>
+                    Incomplete:
+                  </span>
+                  {getIssues(mod).map((issue) => (
+                    <span key={issue} style={{
+                      fontSize: 12, color: '#92400E',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      <span style={{ color: '#D97706' }}>·</span> {issue}
+                    </span>
+                  ))}
+                  <button
+                    className="btn btn-sm"
+                    style={{ marginLeft: 'auto', background: '#D97706', color: '#fff', border: 'none', fontSize: 12 }}
+                    onClick={() => { setEditing(mod); setPanel('edit'); setExpandedIssues(null); }}
+                  >
+                    Fix in Edit →
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
