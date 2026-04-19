@@ -230,7 +230,7 @@ function ModuleEditor({
             <div style={{ fontSize: 12, color: '#7C3AED' }}>
               {isCreate
                 ? 'Drop a video, audio, PDF, or doc — AI will pre-fill the form below'
-                : 'Drop a file — AI will suggest updates for your review before anything changes'}
+                : 'Drop a file — AI will suggest field updates for review. The file is also saved as primary content.'}
             </div>
           </>
         )}
@@ -646,20 +646,18 @@ export default function AdminModules() {
     try {
       const created = await moduleSkillsApi.create(d) as ModuleSkill;
       setModules((prev) => [...prev, created]);
-      // Create checklist items from steps in background
+      // Create checklist synchronously so items exist when user opens Edit
       const steps = [...pendingChecklist];
       setPendingChecklist([]);
       if (steps.length) {
-        (async () => {
-          try {
-            const t = await checklistsApi.createTemplate(created.id, { title: 'Completion Checklist' });
-            for (let i = 0; i < steps.length; i++) {
-              await checklistsApi.addItem(t.id, { label: steps[i], item_type: 'checkbox', is_required: true, display_order: i });
-            }
-          } catch { /* non-fatal */ }
-        })();
+        const t = await checklistsApi.createTemplate(created.id, { title: 'Completion Checklist' });
+        await Promise.all(
+          steps.map((label, i) =>
+            checklistsApi.addItem(t.id, { label, item_type: 'checkbox', is_required: true, display_order: i })
+          )
+        );
       }
-      // Attach smart fill file as media in background
+      // Attach smart fill file as media in background (non-critical)
       if (pendingSmartMedia) {
         const pm = pendingSmartMedia;
         setPendingSmartMedia(null);
@@ -852,11 +850,11 @@ export default function AdminModules() {
               }}
               onApplyProposedSteps={handleApplyProposedSteps} />
             <div style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 24 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
-                Media files
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 2 }}>
+                Supplementary materials
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 14 }}>
-                Attach videos, audio, recordings, PDFs, or Word docs learners will see with this module.
+                Additional files learners can reference — separate from any AI-analyzed content above.
               </div>
               <MediaUpload moduleId={editing.id} />
             </div>
