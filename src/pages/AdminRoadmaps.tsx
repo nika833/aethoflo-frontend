@@ -1,10 +1,119 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { roadmapsApi, domainsApi, moduleSkillsApi } from '../lib/api';
 import { PageHeader, EmptyState, Spinner, Alert } from '../components/ui';
+
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const HOURS = Array.from({ length: 24 }, (_, i) => {
+  const h = i % 12 || 12;
+  const ampm = i < 12 ? 'AM' : 'PM';
+  return { value: i, label: `${h}:00 ${ampm}` };
+});
+
+function SchedulePill({ roadmapId, initialDay, initialHour, onSaved }: {
+  roadmapId: string;
+  initialDay: number | null;
+  initialHour: number | null;
+  onSaved: (day: number | null, hour: number | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [day, setDay] = useState<number>(initialDay ?? 1);
+  const [hour, setHour] = useState<number>(initialHour ?? 9);
+  const [saving, setSaving] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const hasSchedule = initialDay !== null && initialHour !== null;
+  const label = hasSchedule
+    ? `⏰ ${DAYS[initialDay!]} · ${HOURS[initialHour!].label}`
+    : '⏰ No release schedule';
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await roadmapsApi.update(roadmapId, { release_day_of_week: day, release_hour: hour });
+      onSaved(day, hour);
+      setOpen(false);
+    } finally { setSaving(false); }
+  };
+
+  const clear = async () => {
+    setSaving(true);
+    try {
+      await roadmapsApi.update(roadmapId, { release_day_of_week: null, release_hour: null });
+      onSaved(null, null);
+      setOpen(false);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '5px 13px', borderRadius: 20,
+          border: `1px solid ${hasSchedule ? 'rgba(201,107,71,0.35)' : 'var(--border)'}`,
+          background: hasSchedule ? HEADER_BG : 'var(--surface-2)',
+          color: hasSchedule ? HEADER_TEXT : 'var(--text-tertiary)',
+          fontSize: 12.5, fontWeight: 500, cursor: 'pointer',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+          transition: 'all 120ms',
+        }}
+      >{label}</button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 40,
+          background: '#fff', borderRadius: 12,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.13)',
+          border: '1px solid var(--border-light)',
+          padding: 16, width: 240,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+            Auto-release schedule
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            <select className="form-input" style={{ fontSize: 13 }}
+              value={day} onChange={(e) => setDay(Number(e.target.value))}>
+              {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+            </select>
+            <select className="form-input" style={{ fontSize: 13 }}
+              value={hour} onChange={(e) => setHour(Number(e.target.value))}>
+              {HOURS.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}
+            </select>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.5 }}>
+            Week 1 unlocks on the first {DAYS[day]} at or after enrollment. Each subsequent week releases 7 days later.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary btn-sm" style={{ flex: 1 }}
+              disabled={saving} onClick={save}>
+              {saving ? <Spinner size={13} /> : 'Save'}
+            </button>
+            {hasSchedule && (
+              <button className="btn btn-ghost btn-sm" disabled={saving} onClick={clear}
+                style={{ color: 'var(--text-tertiary)' }}>
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Roadmap {
   id: string; title: string; target_audience: string | null;
   duration_label: string | null; module_count: number; is_active: boolean;
+  release_day_of_week: number | null; release_hour: number | null;
 }
 interface Domain { id: string; name: string; display_order: number; }
 interface ModuleSkill { id: string; title: string; domain_id: string | null; domain_name: string | null; }
@@ -127,6 +236,8 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
   const [dragSource, setDragSource] = useState<{ rmId: string } | null>(null);
   const [dragTarget, setDragTarget] = useState<{ week: number; domainId: string | null } | null>(null);
   const [libraryDrag, setLibraryDrag] = useState<ModuleSkill | null>(null);
+  const [scheduleDay, setScheduleDay] = useState<number | null>(roadmap.release_day_of_week);
+  const [scheduleHour, setScheduleHour] = useState<number | null>(roadmap.release_hour);
 
   useEffect(() => {
     Promise.all([roadmapsApi.get(roadmap.id), domainsApi.list(), moduleSkillsApi.list()])
@@ -205,8 +316,16 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
 
       {error && <div style={{ marginBottom: 12 }}><Alert type="error">{error}</Alert></div>}
 
-      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>
-        Click any cell to add · Drag to move · Double-click to remove · {MAX_PER_WEEK} modules per week recommended
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <SchedulePill
+          roadmapId={roadmap.id}
+          initialDay={scheduleDay}
+          initialHour={scheduleHour}
+          onSaved={(d, h) => { setScheduleDay(d); setScheduleHour(h); }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+          Click any cell to add · Drag to move · Double-click to remove
+        </span>
       </div>
 
       <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
