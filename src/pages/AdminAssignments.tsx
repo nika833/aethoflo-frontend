@@ -209,6 +209,122 @@ function AssignForm({ users, roadmaps, onSave, onCancel, saving }: {
   );
 }
 
+// ─── Bulk Assign Form ─────────────────────────────────────────────────────────
+
+function BulkAssignForm({ users, roadmaps, existingAssignments, onDone, onCancel }: {
+  users: User[]; roadmaps: Roadmap[];
+  existingAssignments: Assignment[];
+  onDone: (added: Assignment[]) => void;
+  onCancel: () => void;
+}) {
+  const [roadmapId, setRoadmapId] = useState('');
+  const [activationDate, setActivationDate] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const assignedLearnerIds = new Set(existingAssignments.map((a) => a.learner_id));
+  const learners = users.filter((u) => u.role === 'learner');
+  const filteredLearners = learners.filter((u) =>
+    !search || u.display_name.toLowerCase().includes(search.toLowerCase()) ||
+    u.email.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggle = (id: string) => setSelectedIds((prev) => {
+    const s = new Set(prev);
+    s.has(id) ? s.delete(id) : s.add(id);
+    return s;
+  });
+
+  const handleSave = async () => {
+    if (!roadmapId || selectedIds.size === 0) return;
+    setSaving(true); setError('');
+    const added: Assignment[] = [];
+    try {
+      for (const learnerId of [...selectedIds]) {
+        const a = await assignmentsApi.create({
+          learner_id: learnerId, roadmap_id: roadmapId,
+          ...(activationDate ? { activation_date: activationDate } : {}),
+        });
+        const u = users.find((x) => x.id === learnerId);
+        const r = roadmaps.find((x) => x.id === roadmapId);
+        added.push({
+          ...a, learner_name: u?.display_name ?? '', learner_email: u?.email ?? '',
+          roadmap_title: r?.title ?? '', completed_modules: 0, total_modules: 0,
+          learner_group_label: u?.group_label ?? null,
+        });
+      }
+      onDone(added);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Some assignments failed.';
+      setError(msg);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {error && <Alert type="error">{error}</Alert>}
+      <div className="form-group">
+        <label className="form-label">Roadmap <span style={{ color: 'var(--accent)' }}>*</span></label>
+        <select className="form-select form-input" value={roadmapId} onChange={(e) => setRoadmapId(e.target.value)}>
+          <option value="">— Select roadmap —</option>
+          {roadmaps.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
+        </select>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Activation date <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>(optional)</span></label>
+        <input type="date" className="form-input" value={activationDate} onChange={(e) => setActivationDate(e.target.value)} />
+      </div>
+      <div className="form-group">
+        <label className="form-label">Select learners <span style={{ color: 'var(--accent)' }}>*</span></label>
+        <input className="form-input" style={{ marginBottom: 8, fontSize: 13 }}
+          placeholder="Search learners…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+          maxHeight: 240, overflowY: 'auto' }}>
+          {filteredLearners.length === 0 ? (
+            <div style={{ padding: 16, fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center' }}>No learners found</div>
+          ) : filteredLearners.map((u) => {
+            const alreadyAssigned = roadmapId ? assignedLearnerIds.has(u.id) &&
+              existingAssignments.some((a) => a.learner_id === u.id && a.roadmap_id === roadmapId) : false;
+            return (
+              <label key={u.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                cursor: alreadyAssigned ? 'default' : 'pointer',
+                opacity: alreadyAssigned ? 0.45 : 1,
+                borderBottom: '1px solid var(--border-light)',
+              }}>
+                <input type="checkbox" disabled={alreadyAssigned}
+                  checked={selectedIds.has(u.id)} onChange={() => !alreadyAssigned && toggle(u.id)}
+                  style={{ accentColor: 'var(--accent)', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{u.display_name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {u.email}{u.group_label ? ` · ${u.group_label}` : ''}
+                  </div>
+                </div>
+                {alreadyAssigned && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Already assigned</span>}
+              </label>
+            );
+          })}
+        </div>
+        {selectedIds.size > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 6, fontWeight: 500 }}>
+            {selectedIds.size} learner{selectedIds.size > 1 ? 's' : ''} selected
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary" disabled={!roadmapId || selectedIds.size === 0 || saving}
+          onClick={handleSave}>
+          {saving ? <Spinner size={16} /> : `Assign ${selectedIds.size > 0 ? selectedIds.size : ''} learner${selectedIds.size !== 1 ? 's' : ''}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Activate Modal ───────────────────────────────────────────────────────────
 
 function ActivateModal({ assignment, onSave, onClose, saving }: {
@@ -447,7 +563,7 @@ export default function AdminAssignments() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState<'addLearner' | 'assign' | 'activate' | null>(null);
+  const [modal, setModal] = useState<'addLearner' | 'assign' | 'bulkAssign' | 'activate' | null>(null);
   const [activating, setActivating] = useState<Assignment | null>(null);
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -472,6 +588,11 @@ export default function AdminAssignments() {
 
   const handleAddLearnerDone = (assignment: Assignment) => {
     setAssignments((prev) => [assignment, ...prev]);
+  };
+
+  const handleBulkAssignDone = (added: Assignment[]) => {
+    setAssignments((prev) => [...added, ...prev]);
+    setModal(null);
   };
 
   const handleAssign = async (d: { learner_id: string; roadmap_id: string; activation_date?: string }) => {
@@ -578,7 +699,12 @@ export default function AdminAssignments() {
       <PageHeader
         title="Assignments"
         subtitle="Connect learners to roadmaps and manage activation"
-        action={<button className="btn btn-primary" onClick={() => setModal('addLearner')}>+ Add learner</button>}
+        action={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => setModal('bulkAssign')}>Bulk assign</button>
+            <button className="btn btn-primary" onClick={() => setModal('addLearner')}>+ Add learner</button>
+          </div>
+        }
       />
 
       {error && <div style={{ marginBottom: 16 }}><Alert type="error">{error}</Alert></div>}
@@ -810,6 +936,11 @@ export default function AdminAssignments() {
       <Modal isOpen={modal === 'assign'} onClose={() => setModal(null)} title="Assign existing learner">
         <AssignForm users={users} roadmaps={roadmaps} onSave={handleAssign}
           onCancel={() => setModal(null)} saving={saving} />
+      </Modal>
+
+      <Modal isOpen={modal === 'bulkAssign'} onClose={() => setModal(null)} title="Bulk assign learners">
+        <BulkAssignForm users={users} roadmaps={roadmaps} existingAssignments={assignments}
+          onDone={handleBulkAssignDone} onCancel={() => setModal(null)} />
       </Modal>
 
       <Modal isOpen={modal === 'activate' && !!activating}
