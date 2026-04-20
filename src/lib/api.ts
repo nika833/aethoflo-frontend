@@ -98,6 +98,9 @@ export const learnerProgressApi = {
     api.get(`/learner-progress/module/${roadmapModuleId}`).then((r) => r.data),
   submitModule: (roadmapModuleId: string, d: Record<string, unknown>) =>
     api.post(`/learner-progress/module/${roadmapModuleId}/submit`, d).then((r) => r.data),
+  peerSignal: (roadmapModuleId: string, prompt: string) =>
+    api.get(`/learner-progress/peer-signal/${roadmapModuleId}`, { params: { prompt } })
+      .then((r) => r.data as { count: number; samples: string[] }),
   getAssignment: (assignmentId: string) =>
     api.get(`/learner-progress/assignment/${assignmentId}`).then((r) => r.data),
 };

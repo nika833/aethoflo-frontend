@@ -56,18 +56,47 @@ const STAR_LABELS: Record<number, string> = {
   5: 'Extremely helpful',
 };
 
+const PEER_PROMPTS: { key: 'hard' | 'style' | 'easier'; question: string; placeholder: string }[] = [
+  {
+    key: 'hard',
+    question: 'What was the hardest part?',
+    placeholder: 'e.g. The trickiest part for me was staying consistent when the client was dysregulated — I had to remind myself to slow down before responding...',
+  },
+  {
+    key: 'style',
+    question: "What's your approach to this in practice?",
+    placeholder: "e.g. I tend to walk through the visual schedule before every session now — it's become a quick 30-second ritual that sets the tone...",
+  },
+  {
+    key: 'easier',
+    question: 'How has this changed your work?',
+    placeholder: 'e.g. Data collection feels less like a chore now that I understand why each data point matters for treatment decisions...',
+  },
+];
+
+function promptIndexFor(id: string): number {
+  // Deterministic per module — all learners on the same module see the same question
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
+  return h % 3;
+}
+
 export default function LearnerModulePage() {
   const { roadmapModuleId } = useParams<{ roadmapModuleId: string }>();
   const navigate = useNavigate();
   const [mod, setMod] = useState<ModuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [phase, setPhase] = useState<'content' | 'feedback'>('content');
+  const [phase, setPhase] = useState<'content' | 'feedback' | 'peer'>('content');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [responses, setResponses] = useState<Record<string, { bool?: boolean; text?: string; number?: number }>>({});
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
+  const [peerSignal, setPeerSignal] = useState<{ count: number; samples: string[] } | null>(null);
+
+  const promptIdx = promptIndexFor(roadmapModuleId ?? '');
+  const currentPrompt = PEER_PROMPTS[promptIdx];
 
   useEffect(() => {
     if (!roadmapModuleId) return;
@@ -122,8 +151,13 @@ export default function LearnerModulePage() {
         responses: responseItems,
         feedback_rating: feedbackRating,
         feedback_comment: feedbackComment.trim() || null,
+        feedback_prompt: currentPrompt.key,
       });
       setSubmitted(true);
+      // Fetch peer signal in background — non-blocking
+      learnerProgressApi.peerSignal(roadmapModuleId, currentPrompt.key)
+        .then((signal) => { setPeerSignal(signal); setPhase('peer'); })
+        .catch(() => { setPhase('peer'); }); // show peer screen even if signal fails
     } catch {
       setError('Submission failed. Please try again.');
     } finally {
@@ -135,24 +169,86 @@ export default function LearnerModulePage() {
   if (error && !mod) return <Alert type="error">{error}</Alert>;
   if (!mod) return null;
 
-  // ── Completed state ─────────────────────────────────────────────────────────
+  // ── Peer moment screen (shown after submit) ─────────────────────────────────
+  if (submitted && phase === 'peer') {
+    return (
+      <div className="animate-fade-up" style={{ maxWidth: 600 }}>
+        {/* Completion mark */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+            background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, color: 'var(--status-completed)',
+          }}>✓</div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>Module complete</div>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Your feedback has been saved</div>
+          </div>
+        </div>
+
+        {/* Peer signal card */}
+        {peerSignal && peerSignal.count >= 3 ? (
+          <div style={{
+            background: 'var(--surface-2)', border: '1px solid var(--border-light)',
+            borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28,
+          }}>
+            <div style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: 'var(--accent)', marginBottom: 12,
+            }}>From your peers</div>
+            <p style={{ fontSize: 15, color: 'var(--text-primary)', marginBottom: 16, lineHeight: 1.6 }}>
+              <strong>{peerSignal.count}</strong> providers in your organization completed this milestone this month.
+            </p>
+            {peerSignal.samples.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{
+                  fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)',
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                }}>
+                  On "{currentPrompt.question}"
+                </div>
+                {peerSignal.samples.map((s, i) => (
+                  <blockquote key={i} style={{
+                    margin: 0, padding: '12px 16px',
+                    background: 'var(--surface)', borderRadius: 'var(--radius-md)',
+                    borderLeft: '3px solid var(--accent-mid)',
+                    fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.65,
+                    fontStyle: 'italic',
+                  }}>
+                    "{s}"
+                  </blockquote>
+                ))}
+              </div>
+            )}
+            {peerSignal.samples.length === 0 && (
+              <p style={{ fontSize: 14, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+                Be one of the first to share on this question — your response may appear here for future providers.
+              </p>
+            )}
+          </div>
+        ) : peerSignal !== null ? (
+          <div style={{
+            background: 'var(--surface-2)', border: '1px solid var(--border-light)',
+            borderRadius: 'var(--radius-lg)', padding: '20px 24px', marginBottom: 28,
+          }}>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0, fontStyle: 'italic' }}>
+              You're among the first to complete this milestone. Your feedback will help shape what future providers see here.
+            </p>
+          </div>
+        ) : null}
+
+        <button className="btn btn-primary" onClick={() => navigate('/learner')}>
+          Back to roadmap →
+        </button>
+      </div>
+    );
+  }
+
+  // ── Submitted but peer signal still loading ──────────────────────────────────
   if (submitted) {
     return (
-      <div className="animate-fade-up" style={{ maxWidth: 680 }}>
-        <div style={{ textAlign: 'center', padding: '60px 0' }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%',
-            background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 16px', fontSize: 28, color: 'var(--status-completed)',
-          }}>✓</div>
-          <h3 style={{ marginBottom: 8 }}>Module complete</h3>
-          <p style={{ fontSize: 15, color: 'var(--text-secondary)', marginBottom: 28 }}>
-            Great work. Your progress and feedback have been saved.
-          </p>
-          <button className="btn btn-primary" onClick={() => navigate('/learner')}>
-            Back to roadmap →
-          </button>
-        </div>
+      <div style={{ padding: 80, display: 'flex', justifyContent: 'center' }}>
+        <Spinner size={28} />
       </div>
     );
   }
@@ -186,7 +282,7 @@ export default function LearnerModulePage() {
         <div style={{ marginBottom: 8 }}>
           <h3 style={{ marginBottom: 4 }}>How useful was this module?</h3>
           <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-            Your feedback shapes future training content.
+            Your feedback helps future providers — responses may appear anonymously as peer insights.
           </p>
         </div>
 
@@ -203,14 +299,14 @@ export default function LearnerModulePage() {
 
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label" style={{ marginBottom: 6 }}>
-              Describe a scenario where you could apply this
+              Share with peers: {currentPrompt.question}
               <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 6 }}>optional</span>
             </label>
             <textarea
               className="form-textarea"
               value={feedbackComment}
               onChange={(e) => setFeedbackComment(e.target.value)}
-              placeholder="e.g. When a client resists transitioning between tasks, I could use the visual schedule technique from this module to..."
+              placeholder={currentPrompt.placeholder}
               rows={4}
             />
           </div>
