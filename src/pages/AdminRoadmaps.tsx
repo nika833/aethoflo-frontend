@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { roadmapsApi, domainsApi, moduleSkillsApi } from '../lib/api';
 import { PageHeader, EmptyState, Spinner, Alert } from '../components/ui';
 
@@ -136,43 +137,58 @@ function ModuleChip({ mod, repeatCount, onRemove, onDragStart }: {
   mod: GridModule; repeatCount: number;
   onRemove: () => void; onDragStart: (e: React.DragEvent) => void;
 }) {
+  const navigate = useNavigate();
+  const [hovered, setHovered] = useState(false);
+
   return (
     <div
       draggable onDragStart={onDragStart}
-      onDoubleClick={(e) => { e.stopPropagation(); onRemove(); }}
-      title="Drag to move · Double-click to remove"
+      title="Drag to move · Click title to edit"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         background: '#fff',
         border: '1px solid rgba(201,107,71,0.18)',
         borderRadius: 22,
-        padding: '5px 12px',
+        padding: '5px 8px 5px 12px',
         fontSize: 12,
         fontWeight: 500,
         color: 'var(--text-primary)',
         cursor: 'grab',
         userSelect: 'none',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04)',
+        boxShadow: hovered
+          ? '0 4px 14px rgba(0,0,0,0.11), 0 1px 3px rgba(0,0,0,0.06)'
+          : '0 2px 8px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04)',
+        transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
         transition: 'box-shadow 120ms, transform 120ms',
       }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 14px rgba(0,0,0,0.11), 0 1px 3px rgba(0,0,0,0.06)';
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04)';
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-      }}
     >
-      <span style={{ flex: 1, lineHeight: 1.35 }}>{mod.title}</span>
+      <span
+        onClick={(e) => { e.stopPropagation(); navigate(`/admin/modules?edit=${mod.module_skill_id}`); }}
+        style={{ flex: 1, lineHeight: 1.35, cursor: 'pointer' }}
+      >{mod.title}</span>
       {repeatCount > 1 && (
         <span style={{
           background: 'var(--accent)', color: '#fff', fontSize: 10, fontWeight: 700,
           borderRadius: 10, padding: '1px 5px', flexShrink: 0,
         }}>{repeatCount}×</span>
       )}
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        title="Remove from roadmap"
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          padding: '0 2px', lineHeight: 1, fontSize: 14,
+          color: 'var(--text-tertiary)', opacity: hovered ? 1 : 0,
+          transition: 'opacity 120ms, color 80ms',
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#DC2626'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-tertiary)'; }}
+      >×</button>
     </div>
   );
 }
@@ -325,7 +341,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
           onSaved={(d, h) => { setScheduleDay(d); setScheduleHour(h); }}
         />
         <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-          Click any cell to add · Drag to move · Double-click to remove
+          Click any cell to add · Drag to move · Click title to edit · × to remove
         </span>
       </div>
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { moduleSkillsApi, domainsApi, checklistsApi, analyzeApi } from '../lib/api';
 import { SlideOver, EmptyState, PageHeader, Alert, Spinner, SimilarityWarning } from '../components/ui';
 import { MediaUpload } from '../components/MediaUpload';
@@ -808,6 +809,7 @@ function ChecklistSection({ moduleId, autoItems, refreshKey }: { moduleId: strin
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function AdminModules() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [modules, setModules] = useState<ModuleSkill[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
@@ -840,6 +842,19 @@ export default function AdminModules() {
     .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, [filterDomain]);
+
+  // Auto-open edit panel when navigated from roadmap with ?edit=<moduleSkillId>
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (editId && modules.length > 0 && !editing) {
+      const mod = modules.find((m) => m.id === editId);
+      if (mod) {
+        setEditing(mod);
+        setPanel('edit');
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [modules, searchParams]);
 
   // Load existing media when edit panel opens so uploads persist across sessions
   useEffect(() => {
