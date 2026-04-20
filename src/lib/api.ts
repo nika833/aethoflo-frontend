@@ -114,6 +114,8 @@ export const usersApi = {
   create: (d: Record<string, unknown>) => api.post('/users', d).then((r) => r.data),
   update: (id: string, d: Record<string, unknown>) =>
     api.patch(`/users/${id}`, d).then((r) => r.data),
+  archive: (id: string) => api.post(`/users/${id}/archive`).then((r) => r.data),
+  restore: (id: string) => api.post(`/users/${id}/restore`).then((r) => r.data),
   groups: () => api.get('/users/groups').then((r) => r.data as string[]),
 };
 
@@ -208,6 +210,11 @@ export const adminStatsApi = {
     avg_completion_rate: number;
     modules_no_completions: number;
   }),
+  auditLog: () => api.get('/admin/audit-log').then((r) => r.data as {
+    id: string; action: string; entity_type: string | null; entity_id: string | null;
+    metadata: Record<string, unknown> | null; created_at: string;
+    actor_name: string | null; actor_email: string | null;
+  }[]),
 };
 
 export const magicLinkApi = {
