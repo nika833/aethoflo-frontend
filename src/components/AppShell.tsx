@@ -127,8 +127,8 @@ export default function AppShell() {
       </aside>
 
       {/* Main content */}
-      <main style={{ flex: 1, overflow: 'auto' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '36px 32px' }}>
+      <main style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
+        <div style={{ padding: '36px 28px' }}>
           <Outlet />
         </div>
       </main>

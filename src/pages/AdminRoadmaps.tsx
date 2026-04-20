@@ -90,7 +90,7 @@ function SchedulePill({ roadmapId, initialDay, initialHour, onSaved }: {
             </select>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.5 }}>
-            Week 1 unlocks on the first {DAYS[day]} at or after enrollment. Each subsequent week releases 7 days later.
+            Set the day and time modules auto-release to each learner based on their enrollment date.
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-primary btn-sm" style={{ flex: 1 }}
@@ -328,11 +328,11 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
         </span>
       </div>
 
-      <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
+      <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 240px)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: DOMAIN_COL_W + weeks.length * WEEK_COL_W }}>
           <thead>
             <tr>
-              {/* Top-left corner cell */}
+              {/* Top-left corner cell — sticky both axes */}
               <th style={{
                 width: DOMAIN_COL_W,
                 padding: '10px 14px',
@@ -341,9 +341,10 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
                 borderRight: `1px solid ${HEADER_BORDER}`,
                 fontSize: 11, fontWeight: 700, color: HEADER_TEXT,
                 textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.07em',
+                position: 'sticky', top: 0, left: 0, zIndex: 4,
               }}>Domain</th>
 
-              {/* Week column headers */}
+              {/* Week column headers — sticky to top */}
               {weeks.map((week) => {
                 const total = modulesPerWeek(week);
                 const over = total > MAX_PER_WEEK;
@@ -357,6 +358,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
                     fontSize: 12, fontWeight: 700,
                     color: over ? '#92400E' : HEADER_TEXT,
                     textAlign: 'center', whiteSpace: 'nowrap',
+                    position: 'sticky', top: 0, zIndex: 2,
                   }}>
                     <div>Week {week}</div>
                     {over && <div style={{ fontSize: 10, color: '#D97706', marginTop: 2 }}>⚠ {total}/{MAX_PER_WEEK}</div>}
@@ -368,7 +370,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
           <tbody>
             {rows.map((row) => (
               <tr key={row.id ?? '_null'}>
-                {/* Domain row header */}
+                {/* Domain row header — sticky to left */}
                 <td style={{
                   padding: '10px 14px',
                   background: HEADER_BG,
@@ -378,6 +380,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
                   color: row.id ? HEADER_TEXT : 'var(--text-tertiary)',
                   verticalAlign: 'middle',
                   whiteSpace: 'nowrap',
+                  position: 'sticky', left: 0, zIndex: 1,
                 }}>{row.name}</td>
 
                 {/* Week cells */}
