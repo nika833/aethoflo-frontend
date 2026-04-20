@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../lib/authStore';
+import { domainsApi, moduleSkillsApi, roadmapsApi } from '../lib/api';
 
 const ADMIN_NAV = [
   { to: '/admin',             label: 'Dashboard',      icon: '⊞' },
@@ -18,6 +19,134 @@ const LEARNER_NAV = [
 
 const SIDEBAR_BG = '#5C3520';
 const BORDER_COLOR = 'rgba(255,255,255,0.08)';
+const ONBOARDING_KEY = 'aethoflo_onboarding_done';
+
+// ─── Onboarding Floater ───────────────────────────────────────────────────────
+
+function OnboardingFloater() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [dismissed, setDismissed] = useState(() => !!localStorage.getItem(ONBOARDING_KEY));
+  const [steps, setSteps] = useState({ domains: false, modules: false, roadmaps: false });
+  const [loading, setLoading] = useState(true);
+
+  const check = () => {
+    Promise.all([domainsApi.list(), moduleSkillsApi.list(), roadmapsApi.list()])
+      .then(([doms, mods, roads]) => {
+        setSteps({ domains: doms.length > 0, modules: mods.length > 0, roadmaps: roads.length > 0 });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!dismissed) check();
+  }, [location.pathname]);
+
+  const dismiss = () => {
+    localStorage.setItem(ONBOARDING_KEY, 'true');
+    setDismissed(true);
+  };
+
+  if (dismissed || loading) return null;
+
+  const allDone = steps.domains && steps.modules && steps.roadmaps;
+  const nextStep = !steps.domains ? 'domains' : !steps.modules ? 'modules' : 'roadmaps';
+  const nextPath = { domains: '/admin/domains', modules: '/admin/modules', roadmaps: '/admin/roadmaps' }[nextStep];
+  const nextLabel = { domains: 'Create a domain →', modules: 'Build a module →', roadmaps: 'Create a roadmap →' }[nextStep];
+
+  const stepRows = [
+    { done: steps.domains,  label: 'Create at least one domain',  path: '/admin/domains' },
+    { done: steps.modules,  label: 'Build your first module',      path: '/admin/modules' },
+    { done: steps.roadmaps, label: 'Define a learning roadmap',    path: '/admin/roadmaps' },
+  ];
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 28, right: 28, zIndex: 1000,
+      width: 320, borderRadius: 14,
+      background: '#fff',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
+      border: '1px solid var(--border)',
+      animation: 'fadeUp 300ms var(--ease-out) both',
+      overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px 12px',
+        borderBottom: '1px solid var(--border-light)',
+        background: allDone ? '#F0FDF4' : 'var(--accent-light)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>{allDone ? '🎉' : '✦'}</span>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+            {allDone ? "You're all set!" : 'Quick setup'}
+          </span>
+        </div>
+        <button onClick={dismiss} style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1,
+          padding: '2px 4px', borderRadius: 4,
+        }}>×</button>
+      </div>
+
+      {/* Steps */}
+      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {stepRows.map((s, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            opacity: s.done ? 0.6 : 1,
+          }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: s.done ? '#D1FAE5' : 'var(--surface-3)',
+              color: s.done ? '#065F46' : 'var(--text-tertiary)',
+              fontSize: 11, fontWeight: 700,
+              border: `1.5px solid ${s.done ? '#6EE7B7' : 'var(--border)'}`,
+              transition: 'all 200ms',
+            }}>
+              {s.done ? '✓' : i + 1}
+            </div>
+            <span style={{
+              flex: 1, fontSize: 13,
+              color: s.done ? 'var(--text-tertiary)' : 'var(--text-primary)',
+              textDecoration: s.done ? 'line-through' : 'none',
+            }}>
+              {s.label}
+            </span>
+            {!s.done && (
+              <button onClick={() => navigate(s.path)} style={{
+                background: 'none', border: 'none', color: 'var(--accent)',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '2px 0',
+                flexShrink: 0,
+              }}>
+                Go →
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: '0 16px 14px' }}>
+        {allDone ? (
+          <button className="btn btn-primary btn-sm" style={{ width: '100%' }} onClick={dismiss}>
+            Done — hide this
+          </button>
+        ) : (
+          <button className="btn btn-primary btn-sm" style={{ width: '100%' }}
+            onClick={() => navigate(nextPath)}>
+            {nextLabel}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── AppShell ─────────────────────────────────────────────────────────────────
 
 export default function AppShell() {
   const { user, clearAuth } = useAuthStore();
@@ -132,6 +261,9 @@ export default function AppShell() {
           <Outlet />
         </div>
       </main>
+
+      {/* Onboarding floater — admin only */}
+      {user?.role === 'admin' && <OnboardingFloater />}
     </div>
   );
 }

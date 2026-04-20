@@ -181,37 +181,6 @@ export default function AdminDashboard() {
       {!loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20, marginBottom: 40 }}>
 
-          {/* Getting started checklist */}
-          {!allStarted && (
-            <div className="card card-padded">
-              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 16 }}>
-                Getting started
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <CheckStep done={started.domains} label="① Create at least one domain" />
-                <CheckStep done={started.modules} label="② Build your first module" />
-                <CheckStep done={started.roadmaps} label="③ Define a learning roadmap" />
-              </div>
-              {!started.domains && (
-                <button className="btn btn-primary btn-sm" style={{ marginTop: 16, alignSelf: 'flex-start' }}
-                  onClick={() => navigate('/admin/domains')}>
-                  Create a domain →
-                </button>
-              )}
-              {started.domains && !started.modules && (
-                <button className="btn btn-primary btn-sm" style={{ marginTop: 16, alignSelf: 'flex-start' }}
-                  onClick={() => navigate('/admin/modules')}>
-                  Build a module →
-                </button>
-              )}
-              {started.domains && started.modules && !started.roadmaps && (
-                <button className="btn btn-primary btn-sm" style={{ marginTop: 16, alignSelf: 'flex-start' }}
-                  onClick={() => navigate('/admin/roadmaps')}>
-                  Create a roadmap →
-                </button>
-              )}
-            </div>
-          )}
 
           {/* Content health */}
           {(allStarted || issues.length > 0) && (
