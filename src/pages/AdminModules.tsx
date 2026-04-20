@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { moduleSkillsApi, domainsApi, checklistsApi, analyzeApi } from '../lib/api';
 import { SlideOver, EmptyState, PageHeader, Alert, Spinner, SimilarityWarning } from '../components/ui';
 import { MediaUpload } from '../components/MediaUpload';
@@ -1131,8 +1132,9 @@ export default function AdminModules() {
         )}
       </SlideOver>
 
-      {previewing && (
-        <ModulePreviewDrawer moduleId={previewing} onClose={() => setPreviewing(null)} />
+      {previewing && createPortal(
+        <ModulePreviewDrawer moduleId={previewing} onClose={() => setPreviewing(null)} />,
+        document.body
       )}
     </div>
   );
