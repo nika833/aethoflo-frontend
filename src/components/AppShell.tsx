@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../lib/authStore';
 import { domainsApi, moduleSkillsApi, roadmapsApi } from '../lib/api';
+import api from '../lib/api';
 
 const ADMIN_NAV = [
   { to: '/admin',             label: 'Dashboard',      icon: '⊞' },
@@ -146,12 +147,81 @@ function OnboardingFloater() {
   );
 }
 
+// ─── Set Password Modal ───────────────────────────────────────────────────────
+
+function SetPasswordModal({ onClose }: { onClose: () => void }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
+  const { user } = useAuthStore();
+
+  const handleSave = async () => {
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (password !== confirm) { setError('Passwords do not match.'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.patch(`/users/${user!.id}`, { password });
+      setDone(true);
+    } catch {
+      setError('Could not set password. Try again.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 2000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.45)',
+    }} onClick={onClose}>
+      <div style={{
+        background: '#fff', borderRadius: 14, padding: 28, width: 360,
+        boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Set a password</div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
+          Lets you log in with email + password (useful for staging).
+        </div>
+        {done ? (
+          <>
+            <div style={{ fontSize: 14, color: '#065F46', background: '#D1FAE5',
+              padding: '10px 14px', borderRadius: 8, marginBottom: 16 }}>
+              Password set. You can now use it on any environment.
+            </div>
+            <button className="btn btn-primary" style={{ width: '100%' }} onClick={onClose}>Done</button>
+          </>
+        ) : (
+          <>
+            {error && <div style={{ fontSize: 13, color: '#B91C1C', background: '#FEE2E2',
+              padding: '8px 12px', borderRadius: 6, marginBottom: 12 }}>{error}</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+              <input type="password" className="form-input" placeholder="New password (min 8 chars)"
+                value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
+              <input type="password" className="form-input" placeholder="Confirm password"
+                value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSave()} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving || !password || !confirm}>
+                {saving ? 'Saving…' : 'Set password'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── AppShell ─────────────────────────────────────────────────────────────────
 
 export default function AppShell() {
   const { user, clearAuth } = useAuthStore();
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
+  const [showSetPassword, setShowSetPassword] = useState(false);
   const nav = user?.role === 'admin' ? ADMIN_NAV : LEARNER_NAV;
   const expanded = hovered;
 
@@ -234,8 +304,17 @@ export default function AppShell() {
               <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.display_name}
               </div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
-                {user?.role}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
+                  {user?.role}
+                </div>
+                <button onClick={() => setShowSetPassword(true)} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 11, color: 'rgba(255,255,255,0.25)', padding: 0,
+                  textDecoration: 'underline',
+                }}>
+                  set password
+                </button>
               </div>
             </div>
           )}
@@ -264,6 +343,9 @@ export default function AppShell() {
 
       {/* Onboarding floater — admin only */}
       {user?.role === 'admin' && <OnboardingFloater />}
+
+      {/* Set password modal */}
+      {showSetPassword && <SetPasswordModal onClose={() => setShowSetPassword(false)} />}
     </div>
   );
 }
