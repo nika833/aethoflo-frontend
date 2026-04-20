@@ -52,7 +52,7 @@ export default function LoginPage() {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <img src="/logo.svg" alt="AethoFlo" style={{ height: 36, width: 'auto', marginBottom: 10 }} />
+          <img src="/logo.svg" alt="AethoFlo" style={{ height: 56, width: 'auto', marginBottom: 10 }} />
           <p style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
             Roadmap-based training delivery
           </p>
@@ -104,9 +104,9 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)', marginTop: 20 }}>
-          No account?{' '}
-          <Link to="/signup" style={{ color: 'var(--accent)', fontWeight: 500 }}>Create a free workspace</Link>
+        <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)', marginTop: 20 }}>
+          Questions? Email{' '}
+          <a href="mailto:nika@corvaco.com" style={{ color: 'var(--accent)' }}>nika@corvaco.com</a>
         </p>
       </div>
     </div>

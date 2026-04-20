@@ -392,13 +392,6 @@ export default function LearnerModulePage() {
         </section>
       )}
 
-      {mod.what_to_do && (
-        <section className="card card-padded" style={{ marginBottom: 28 }}>
-          <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>What to do</h4>
-          <p style={{ fontSize: 14 }}>{mod.what_to_do}</p>
-        </section>
-      )}
-
       {/* Checklist */}
       {mod.checklist && (
         <section style={{ marginBottom: 28 }}>

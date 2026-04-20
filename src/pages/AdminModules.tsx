@@ -99,8 +99,8 @@ function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose:
           <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ fontSize: 18, lineHeight: 1 }}>×</button>
         </div>
 
-        {/* Content */}
-        <div style={{ padding: '28px 28px 48px', flex: 1, overflowY: 'auto' }}>
+        {/* Content — min-height:0 required for overflow-y:auto to work inside flex column */}
+        <div style={{ padding: '28px 28px 48px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={28} /></div>
           ) : !mod ? null : (
@@ -137,13 +137,6 @@ function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose:
                   <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent-dark)',
                     letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>A note for you</div>
                   <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>{mod.context_note}</p>
-                </section>
-              )}
-
-              {mod.what_to_do && (
-                <section className="card card-padded" style={{ marginBottom: 28 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>What to do</div>
-                  <p style={{ fontSize: 14 }}>{mod.what_to_do}</p>
                 </section>
               )}
 
@@ -601,16 +594,6 @@ function ModuleEditor({
         </span>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">What to do</label>
-        <textarea className="form-textarea" value={form.what_to_do}
-          onChange={(e) => set('what_to_do', e.target.value)}
-          placeholder="Step-by-step instructions or actions the learner should take..."
-          rows={3} />
-        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-          Practical instructions shown on the module page. Leave blank to hide.
-        </span>
-      </div>
 
       {isCreate && (
         <div className="form-group">
