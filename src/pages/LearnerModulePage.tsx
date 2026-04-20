@@ -74,12 +74,6 @@ const PEER_PROMPTS: { key: 'hard' | 'style' | 'easier'; question: string; placeh
   },
 ];
 
-function promptIndexFor(id: string): number {
-  // Deterministic per module — all learners on the same module see the same question
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
-  return h % 3;
-}
 
 export default function LearnerModulePage() {
   const { roadmapModuleId } = useParams<{ roadmapModuleId: string }>();
@@ -95,7 +89,8 @@ export default function LearnerModulePage() {
   const [feedbackComment, setFeedbackComment] = useState('');
   const [peerSignal, setPeerSignal] = useState<{ count: number; samples: string[] } | null>(null);
 
-  const promptIdx = promptIndexFor(roadmapModuleId ?? '');
+  // Random per-provider, stable for this session
+  const [promptIdx] = useState(() => Math.floor(Math.random() * 3));
   const currentPrompt = PEER_PROMPTS[promptIdx];
 
   useEffect(() => {
