@@ -579,7 +579,9 @@ export default function AdminAssignments() {
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
 
   const load = () => Promise.all([
-    assignmentsApi.list(), usersApi.list(), roadmapsApi.list(),
+    assignmentsApi.list().catch(() => []),
+    usersApi.list().catch(() => []),
+    roadmapsApi.list().catch(() => []),
   ]).then(([a, u, r]) => {
     setAssignments(a); setUsers(u); setRoadmaps(r);
   }).finally(() => setLoading(false));
