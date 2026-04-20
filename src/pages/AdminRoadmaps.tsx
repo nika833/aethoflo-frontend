@@ -15,8 +15,13 @@ interface GridModule {
 
 const MAX_PER_WEEK = 4;
 const MIN_WEEKS = 6;
-const COL_W = 165;
-const WEEK_W = 68;
+const WEEK_COL_W = 150;
+const DOMAIN_COL_W = 140;
+
+// Header colors derived from brand palette
+const HEADER_BG = '#FEF0E9';
+const HEADER_TEXT = '#C96B47';
+const HEADER_BORDER = 'rgba(201,107,71,0.2)';
 
 function ModuleChip({ mod, repeatCount, onRemove, onDragStart }: {
   mod: GridModule; repeatCount: number;
@@ -28,26 +33,43 @@ function ModuleChip({ mod, repeatCount, onRemove, onDragStart }: {
       onDoubleClick={(e) => { e.stopPropagation(); onRemove(); }}
       title="Drag to move · Double-click to remove"
       style={{
-        background: '#fff', border: '1px solid var(--border)', borderRadius: 7,
-        padding: '5px 8px', fontSize: 12, fontWeight: 500, color: 'var(--text-primary)',
-        cursor: 'grab', userSelect: 'none',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        display: 'flex', alignItems: 'flex-start', gap: 4,
+        background: '#fff',
+        border: '1px solid rgba(201,107,71,0.18)',
+        borderRadius: 22,
+        padding: '5px 12px',
+        fontSize: 12,
+        fontWeight: 500,
+        color: 'var(--text-primary)',
+        cursor: 'grab',
+        userSelect: 'none',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        transition: 'box-shadow 120ms, transform 120ms',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 14px rgba(0,0,0,0.11), 0 1px 3px rgba(0,0,0,0.06)';
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04)';
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
       }}
     >
       <span style={{ flex: 1, lineHeight: 1.35 }}>{mod.title}</span>
       {repeatCount > 1 && (
         <span style={{
           background: 'var(--accent)', color: '#fff', fontSize: 10, fontWeight: 700,
-          borderRadius: 10, padding: '1px 5px', flexShrink: 0, marginTop: 1,
+          borderRadius: 10, padding: '1px 5px', flexShrink: 0,
         }}>{repeatCount}×</span>
       )}
     </div>
   );
 }
 
-function ModulePicker({ domainId, domainName, modules, onPick, onClose }: {
-  domainId: string | null; domainName: string;
+function ModulePicker({ domainId, domainName, week, modules, onPick, onClose }: {
+  domainId: string | null; domainName: string; week: number;
   modules: ModuleSkill[]; onPick: (m: ModuleSkill) => void; onClose: () => void;
 }) {
   const [search, setSearch] = useState('');
@@ -61,11 +83,14 @@ function ModulePicker({ domainId, domainName, modules, onPick, onClose }: {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-        width: 340, maxHeight: 420, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        background: '#fff', borderRadius: 14, boxShadow: '0 12px 40px rgba(0,0,0,0.16)',
+        width: 340, maxHeight: 440, display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--border-light)' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Add to Week — {domainName}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+            Add module — Week {week}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>{domainName}</div>
           <input className="form-input" style={{ fontSize: 13 }} autoFocus
             placeholder="Search modules…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
@@ -122,7 +147,8 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
       }).finally(() => setLoading(false));
   }, [roadmap.id]);
 
-  const columns: { id: string | null; name: string }[] = [
+  // Rows = domains (+ "No domain"), Columns = weeks
+  const rows: { id: string | null; name: string }[] = [
     ...domains.map((d) => ({ id: d.id, name: d.name })),
     { id: null, name: 'No domain' },
   ];
@@ -156,8 +182,10 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
     } catch { setError('Could not remove module.'); }
   };
 
-  const moveModule = async (rmId: string, toWeek: number) => {
-    setGridModules((prev) => prev.map((m) => m.id === rmId ? { ...m, week_number: toWeek } : m));
+  const moveModule = async (rmId: string, toWeek: number, toDomainId: string | null) => {
+    setGridModules((prev) => prev.map((m) =>
+      m.id === rmId ? { ...m, week_number: toWeek, module_domain_id: toDomainId } : m
+    ));
     setDragSource(null); setDragTarget(null); setLibraryDrag(null);
     try { await roadmapsApi.updateModule(roadmap.id, rmId, { week_number: toWeek }); }
     catch { setError('Could not move module.'); }
@@ -177,87 +205,108 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
 
       {error && <div style={{ marginBottom: 12 }}><Alert type="error">{error}</Alert></div>}
 
-      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10 }}>
-        Click any cell to add · Drag to reposition · Double-click a module to remove · {MAX_PER_WEEK} modules per week max
+      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>
+        Click any cell to add · Drag to move · Double-click to remove · {MAX_PER_WEEK} modules per week recommended
       </div>
 
-      <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: WEEK_W + columns.length * COL_W }}>
+      <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: DOMAIN_COL_W + weeks.length * WEEK_COL_W }}>
           <thead>
             <tr>
+              {/* Top-left corner cell */}
               <th style={{
-                width: WEEK_W, padding: '10px 12px', background: 'var(--surface-2)',
-                borderBottom: '2px solid var(--border)', borderRight: '1px solid var(--border)',
-                fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700,
-                textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.06em',
-              }}>Week</th>
-              {columns.map((col) => (
-                <th key={col.id ?? '_null'} style={{
-                  padding: '10px 14px', background: 'var(--surface-2)',
-                  borderBottom: '2px solid var(--border)', borderRight: '1px solid var(--border-light)',
-                  fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', textAlign: 'left',
-                }}>{col.name}</th>
-              ))}
+                width: DOMAIN_COL_W,
+                padding: '10px 14px',
+                background: HEADER_BG,
+                borderBottom: `2px solid ${HEADER_BORDER}`,
+                borderRight: `1px solid ${HEADER_BORDER}`,
+                fontSize: 11, fontWeight: 700, color: HEADER_TEXT,
+                textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.07em',
+              }}>Domain</th>
+
+              {/* Week column headers */}
+              {weeks.map((week) => {
+                const total = modulesPerWeek(week);
+                const over = total > MAX_PER_WEEK;
+                return (
+                  <th key={week} style={{
+                    width: WEEK_COL_W,
+                    padding: '10px 10px',
+                    background: over ? '#FEF3C7' : HEADER_BG,
+                    borderBottom: `2px solid ${over ? '#FCD34D' : HEADER_BORDER}`,
+                    borderRight: `1px solid ${HEADER_BORDER}`,
+                    fontSize: 12, fontWeight: 700,
+                    color: over ? '#92400E' : HEADER_TEXT,
+                    textAlign: 'center', whiteSpace: 'nowrap',
+                  }}>
+                    <div>Week {week}</div>
+                    {over && <div style={{ fontSize: 10, color: '#D97706', marginTop: 2 }}>⚠ {total}/{MAX_PER_WEEK}</div>}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {weeks.map((week) => {
-              const total = modulesPerWeek(week);
-              const over = total > MAX_PER_WEEK;
-              return (
-                <tr key={week}>
-                  <td style={{
-                    padding: '8px 10px', borderRight: '1px solid var(--border)',
-                    borderBottom: '1px solid var(--border-light)', verticalAlign: 'top',
-                    background: over ? '#FEF3C7' : 'var(--surface-2)',
-                    fontSize: 13, fontWeight: 600,
-                    color: over ? '#92400E' : 'var(--text-secondary)',
-                  }}>
-                    <div>{week}</div>
-                    {over && <div style={{ fontSize: 10, color: '#D97706', marginTop: 3, fontWeight: 700 }}>⚠ {total}</div>}
-                  </td>
-                  {columns.map((col) => {
-                    const cellMods = gridModules.filter(
-                      (m) => m.week_number === week && m.module_domain_id === col.id
-                    );
-                    const isTarget = dragTarget?.week === week && dragTarget?.domainId === col.id;
-                    return (
-                      <td key={col.id ?? '_null'}
-                        onClick={() => { if (!dragSource && !libraryDrag) setPicker({ week, domainId: col.id, domainName: col.name }); }}
-                        onDragOver={(e) => { e.preventDefault(); setDragTarget({ week, domainId: col.id }); }}
-                        onDragLeave={() => setDragTarget(null)}
-                        onDrop={(e) => {
-                          e.preventDefault(); setDragTarget(null);
-                          if (libraryDrag) { addModule(libraryDrag, week); setLibraryDrag(null); }
-                          else if (dragSource) moveModule(dragSource.rmId, week);
-                        }}
-                        style={{
-                          padding: 6, verticalAlign: 'top', cursor: 'pointer',
-                          borderRight: '1px solid var(--border-light)',
-                          borderBottom: '1px solid var(--border-light)',
-                          background: isTarget ? 'var(--accent-light)' : over ? '#FFFBEB' : 'transparent',
-                          transition: 'background 100ms', minWidth: COL_W,
-                        }}
-                      >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 68 }}>
-                          {cellMods.map((mod) => (
-                            <ModuleChip key={mod.id} mod={mod} repeatCount={repeatCount(mod.module_skill_id)}
-                              onRemove={() => removeModule(mod.id)}
-                              onDragStart={(e) => { e.stopPropagation(); setDragSource({ rmId: mod.id }); }}
-                            />
-                          ))}
-                          {cellMods.length === 0 && !isTarget && (
-                            <div style={{ height: 68, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontSize: 20, color: 'var(--border)' }}>+</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+            {rows.map((row) => (
+              <tr key={row.id ?? '_null'}>
+                {/* Domain row header */}
+                <td style={{
+                  padding: '10px 14px',
+                  background: HEADER_BG,
+                  borderRight: `1px solid ${HEADER_BORDER}`,
+                  borderBottom: '1px solid var(--border-light)',
+                  fontSize: 13, fontWeight: 600,
+                  color: row.id ? HEADER_TEXT : 'var(--text-tertiary)',
+                  verticalAlign: 'middle',
+                  whiteSpace: 'nowrap',
+                }}>{row.name}</td>
+
+                {/* Week cells */}
+                {weeks.map((week) => {
+                  const cellMods = gridModules.filter(
+                    (m) => m.week_number === week && m.module_domain_id === row.id
+                  );
+                  const isTarget = dragTarget?.week === week && dragTarget?.domainId === row.id;
+                  const weekOver = modulesPerWeek(week) > MAX_PER_WEEK;
+                  return (
+                    <td key={week}
+                      onClick={() => { if (!dragSource && !libraryDrag) setPicker({ week, domainId: row.id, domainName: row.name }); }}
+                      onDragOver={(e) => { e.preventDefault(); setDragTarget({ week, domainId: row.id }); }}
+                      onDragLeave={() => setDragTarget(null)}
+                      onDrop={(e) => {
+                        e.preventDefault(); setDragTarget(null);
+                        if (libraryDrag) { addModule(libraryDrag, week); setLibraryDrag(null); }
+                        else if (dragSource) moveModule(dragSource.rmId, week, row.id);
+                      }}
+                      style={{
+                        padding: 8, verticalAlign: 'top', cursor: 'pointer',
+                        borderRight: '1px solid var(--border-light)',
+                        borderBottom: '1px solid var(--border-light)',
+                        background: isTarget
+                          ? 'rgba(201,107,71,0.08)'
+                          : weekOver ? '#FFFBEB' : 'transparent',
+                        transition: 'background 100ms',
+                        minWidth: WEEK_COL_W,
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minHeight: 64 }}>
+                        {cellMods.map((mod) => (
+                          <ModuleChip key={mod.id} mod={mod} repeatCount={repeatCount(mod.module_skill_id)}
+                            onRemove={() => removeModule(mod.id)}
+                            onDragStart={(e) => { e.stopPropagation(); setDragSource({ rmId: mod.id }); }}
+                          />
+                        ))}
+                        {cellMods.length === 0 && !isTarget && (
+                          <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 18, color: 'rgba(201,107,71,0.2)' }}>+</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -267,8 +316,8 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
 
       {unassigned.length > 0 && (
         <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border-light)' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-            Unassigned modules
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>
+            Module library
             <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>drag onto the grid to place</span>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -277,14 +326,25 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
                 onDragStart={() => setLibraryDrag(mod)}
                 onDragEnd={() => setLibraryDrag(null)}
                 style={{
-                  background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
-                  padding: '6px 12px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-                  cursor: 'grab', userSelect: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                  background: '#fff',
+                  border: '1px solid rgba(201,107,71,0.18)',
+                  borderRadius: 22,
+                  padding: '6px 14px',
+                  fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                  cursor: 'grab', userSelect: 'none',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
                   opacity: libraryDrag?.id === mod.id ? 0.4 : 1,
                   display: 'flex', alignItems: 'center', gap: 8,
+                  transition: 'opacity 120ms',
                 }}>
                 {mod.title}
-                {mod.domain_name && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{mod.domain_name}</span>}
+                {mod.domain_name && (
+                  <span style={{
+                    fontSize: 11, color: HEADER_TEXT,
+                    background: HEADER_BG, borderRadius: 10,
+                    padding: '1px 7px', fontWeight: 500,
+                  }}>{mod.domain_name}</span>
+                )}
               </div>
             ))}
           </div>
@@ -292,7 +352,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
       )}
 
       {picker && (
-        <ModulePicker domainId={picker.domainId} domainName={picker.domainName}
+        <ModulePicker domainId={picker.domainId} domainName={picker.domainName} week={picker.week}
           modules={library} onPick={(m) => addModule(m, picker.week)} onClose={() => setPicker(null)} />
       )}
     </div>
