@@ -20,11 +20,12 @@ interface ModuleProgress {
 
 // ─── Add Learner Form ─────────────────────────────────────────────────────────
 
-function AddLearnerForm({ roadmaps, existingGroups, onDone, onCancel }: {
+function AddLearnerForm({ roadmaps, existingGroups, onDone, onCancel, onAssignExisting }: {
   roadmaps: Roadmap[];
   existingGroups: string[];
   onDone: (assignment: Assignment) => void;
   onCancel: () => void;
+  onAssignExisting: () => void;
 }) {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,12 +35,13 @@ function AddLearnerForm({ roadmaps, existingGroups, onDone, onCancel }: {
   const [activationDate, setActivationDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [duplicateEmail, setDuplicateEmail] = useState('');
   const [magicLinkUrl, setMagicLinkUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
   const handleSave = async () => {
     if (!displayName.trim() || !email.trim() || !roadmapId) return;
-    setSaving(true); setError('');
+    setSaving(true); setError(''); setDuplicateEmail('');
     try {
       const created = await usersApi.create({
         display_name: displayName.trim(), email: email.trim(),
@@ -60,9 +62,14 @@ function AddLearnerForm({ roadmaps, existingGroups, onDone, onCancel }: {
         learner_group_label: created.group_label ?? null,
       });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        ?? 'Could not add learner.';
-      setError(msg);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 409) {
+        setDuplicateEmail(email.trim());
+      } else {
+        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+          ?? 'Could not add learner.';
+        setError(msg);
+      }
     } finally { setSaving(false); }
   };
 
@@ -103,6 +110,25 @@ function AddLearnerForm({ roadmaps, existingGroups, onDone, onCancel }: {
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button className="btn btn-primary" onClick={onCancel}>Done</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (duplicateEmail) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: 'var(--radius-md)', padding: '12px 16px' }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: '#92400E', marginBottom: 4 }}>
+            Account already exists
+          </div>
+          <div style={{ fontSize: 13, color: '#92400E' }}>
+            <strong>{duplicateEmail}</strong> already has an account. Use "Assign existing learner" to add them to a roadmap without creating a duplicate.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary" onClick={() => setDuplicateEmail('')}>Go back</button>
+          <button className="btn btn-primary" onClick={onAssignExisting}>Assign existing learner →</button>
         </div>
       </div>
     );
@@ -368,12 +394,13 @@ const STATUS_COLORS: Record<string, { bg: string; color: string; label: string }
   locked:      { bg: 'var(--surface-3)', color: 'var(--text-tertiary)', label: 'Locked' },
 };
 
-function LearnerDetail({ assignment, onClose, onActivate, onRemove, onEarlyReleaseToggle }: {
+function LearnerDetail({ assignment, onClose, onActivate, onRemove, onEarlyReleaseToggle, onArchiveLearner }: {
   assignment: Assignment;
   onClose: () => void;
   onActivate: () => void;
   onRemove: () => void;
   onEarlyReleaseToggle: (val: boolean) => void;
+  onArchiveLearner: () => void;
 }) {
   const [modules, setModules] = useState<ModuleProgress[]>([]);
   const [loadingModules, setLoadingModules] = useState(true);
@@ -488,7 +515,13 @@ function LearnerDetail({ assignment, onClose, onActivate, onRemove, onEarlyRelea
           <button className="btn btn-secondary btn-sm" onClick={handleResendLink} disabled={generatingLink}>
             {generatingLink ? <Spinner size={12} /> : 'Generate magic link'}
           </button>
-          <button className="btn btn-danger btn-sm" onClick={onRemove}>Remove</button>
+          <button className="btn btn-secondary btn-sm" onClick={onRemove}
+            style={{ color: 'var(--text-secondary)' }}>
+            Remove assignment
+          </button>
+          <button className="btn btn-danger btn-sm" onClick={onArchiveLearner}>
+            Archive learner
+          </button>
         </div>
 
         {/* Magic link display */}
@@ -636,6 +669,15 @@ export default function AdminAssignments() {
       if (detailAssignment?.id === id) setDetailAssignment(null);
       setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
     } catch { setError('Could not remove assignment.'); }
+  };
+
+  const handleArchiveLearner = async (learnerId: string) => {
+    if (!confirm('Archive this learner? Their account will be deactivated and they will lose access. You can restore them later.')) return;
+    try {
+      await usersApi.archive(learnerId);
+      setAssignments((prev) => prev.filter((a) => a.learner_id !== learnerId));
+      setDetailAssignment(null);
+    } catch { setError('Could not archive learner.'); }
   };
 
   const handleEarlyRelease = async (id: string, val: boolean) => {
@@ -915,6 +957,7 @@ export default function AdminAssignments() {
             onActivate={() => { setActivating(detailAssignment); setModal('activate'); }}
             onRemove={() => { setDetailAssignment(null); handleDeactivate(detailAssignment.id); }}
             onEarlyReleaseToggle={(val) => handleEarlyRelease(detailAssignment.id, val)}
+            onArchiveLearner={() => handleArchiveLearner(detailAssignment.learner_id)}
           />
         )}
       </SlideOver>
@@ -926,6 +969,7 @@ export default function AdminAssignments() {
           existingGroups={[...new Set(users.filter(u => u.group_label).map(u => u.group_label!))].sort()}
           onDone={handleAddLearnerDone}
           onCancel={() => setModal(null)}
+          onAssignExisting={() => setModal('assign')}
         />
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
           <button style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)',
