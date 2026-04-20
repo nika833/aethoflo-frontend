@@ -298,6 +298,7 @@ function ModuleEditor({
           objective: s.objective || form.objective,
           why_it_matters: s.why_it_matters || form.why_it_matters,
           context_note: s.context_note || form.context_note,
+          what_to_do: form.what_to_do,
         };
         setForm(nextForm);
         if (s.checklist_items?.length) setSteps(s.checklist_items);
