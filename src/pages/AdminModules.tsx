@@ -830,6 +830,7 @@ export default function AdminModules() {
   const [checklistRefreshKey, setChecklistRefreshKey] = useState(0);
   const [panel, setPanel] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<ModuleSkill | null>(null);
+  const [editingMedia, setEditingMedia] = useState<{ id: string; title: string | null; url: string; mime_type: string }[]>([]);
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [filterDomain, setFilterDomain] = useState('');
   const [expandedIssues, setExpandedIssues] = useState<string | null>(null);
@@ -850,6 +851,24 @@ export default function AdminModules() {
     .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, [filterDomain]);
+
+  // Load existing media when edit panel opens so uploads persist across sessions
+  useEffect(() => {
+    if (panel === 'edit' && editing?.id) {
+      moduleSkillsApi.get(editing.id).then((full) => setEditingMedia(full.media ?? []));
+    } else {
+      setEditingMedia([]);
+    }
+  }, [panel, editing?.id]);
+
+  const refreshEditingMedia = async () => {
+    if (!editing?.id) return;
+    const full = await moduleSkillsApi.get(editing.id);
+    setEditingMedia(full.media ?? []);
+    setModules((prev) => prev.map((m) =>
+      m.id === editing.id ? { ...m, media_count: full.media?.length ?? 0 } : m
+    ));
+  };
 
   const closePanel = () => { setPanel(null); setEditing(null); setJustCreated(false); };
 
@@ -1109,7 +1128,7 @@ export default function AdminModules() {
               <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 14 }}>
                 Additional files learners can reference — separate from any AI-analyzed content above.
               </div>
-              <MediaUpload moduleId={editing.id} />
+              <MediaUpload moduleId={editing.id} existingMedia={editingMedia} onUploaded={refreshEditingMedia} />
             </div>
             <div style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 24 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 12 }}>

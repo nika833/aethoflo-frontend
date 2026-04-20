@@ -42,8 +42,21 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function MediaUpload({ moduleId }: { moduleId: string }) {
-  const [files, setFiles] = useState<MediaFile[]>([]);
+export function MediaUpload({ moduleId, existingMedia = [], onUploaded }: {
+  moduleId: string;
+  existingMedia?: { id: string; title: string | null; url: string; mime_type: string; file_size_bytes?: number }[];
+  onUploaded?: () => void;
+}) {
+  const [files, setFiles] = useState<MediaFile[]>(() =>
+    existingMedia.map((m) => ({
+      id: m.id,
+      name: m.title || m.url.split('/').pop() || 'file',
+      mime_type: m.mime_type,
+      size: m.file_size_bytes ?? 0,
+      status: 'done' as const,
+      url: m.url,
+    }))
+  );
   const [dragging, setDragging] = useState(false);
   const [recording, setRecording] = useState<'idle' | 'audio' | 'video'>('idle');
   const [recSeconds, setRecSeconds] = useState(0);
@@ -110,6 +123,7 @@ export function MediaUpload({ moduleId }: { moduleId: string }) {
           ? { ...x, status: 'done', id: registered.id, url: registered.url, progress: 100 }
           : x
       ));
+      onUploaded?.();
     } catch (err: unknown) {
       const msg = (err as Error)?.message ?? 'Upload failed';
       setFiles((f) => f.map((x) =>
