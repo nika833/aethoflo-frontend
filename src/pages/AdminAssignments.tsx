@@ -565,18 +565,18 @@ export default function AdminAssignments() {
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
           <input
             className="form-input"
-            style={{ flex: '1 1 0', minWidth: 0, fontSize: 13, padding: '7px 12px' }}
-            placeholder="Search name or email…"
+            style={{ width: 200, flexShrink: 0, fontSize: 13, padding: '7px 12px' }}
+            placeholder="Search…"
             value={search} onChange={(e) => setSearch(e.target.value)}
           />
           <select className="form-input form-select"
-            style={{ flex: '0 0 auto', fontSize: 13, padding: '7px 12px' }}
+            style={{ width: 180, flexShrink: 0, fontSize: 13, padding: '7px 12px' }}
             value={filterRoadmap} onChange={(e) => setFilterRoadmap(e.target.value)}>
             <option value="">All roadmaps</option>
             {roadmaps.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
           </select>
           <select className="form-input form-select"
-            style={{ flex: '0 0 auto', fontSize: 13, padding: '7px 12px' }}
+            style={{ width: 170, flexShrink: 0, fontSize: 13, padding: '7px 12px' }}
             value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="">All statuses</option>
             <option value="awaiting">Awaiting activation</option>
@@ -584,7 +584,7 @@ export default function AdminAssignments() {
             <option value="completed">Completed</option>
           </select>
           <select className="form-input form-select"
-            style={{ flex: '0 0 auto', fontSize: 13, padding: '7px 12px' }}
+            style={{ width: 140, flexShrink: 0, fontSize: 13, padding: '7px 12px' }}
             value={sortBy} onChange={(e) => setSortBy(e.target.value as 'date' | 'name')}>
             <option value="date">Newest first</option>
             <option value="name">Name A–Z</option>
