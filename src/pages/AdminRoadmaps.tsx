@@ -274,10 +274,11 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
       }).finally(() => setLoading(false));
   }, [roadmap.id]);
 
-  // Rows = domains (+ "No domain"), Columns = weeks
+  // Rows = domains (+ "No domain" only if some modules lack a domain)
+  const hasUndomained = gridModules.some((m) => m.module_domain_id === null);
   const rows: { id: string | null; name: string }[] = [
     ...domains.map((d) => ({ id: d.id, name: d.name })),
-    { id: null, name: 'No domain' },
+    ...(hasUndomained ? [{ id: null, name: 'No domain' }] : []),
   ];
   const weeks = Array.from({ length: weekCount }, (_, i) => i + 1);
   const modulesPerWeek = (w: number) => gridModules.filter((m) => m.week_number === w).length;
