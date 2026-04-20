@@ -78,7 +78,7 @@ function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose:
       {/* Drawer */}
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 46,
-        width: 540, background: 'var(--surface)', overflowY: 'auto',
+        width: 540, background: 'var(--surface)',
         boxShadow: '-8px 0 40px rgba(0,0,0,0.14)',
         display: 'flex', flexDirection: 'column',
       }}>
@@ -100,7 +100,7 @@ function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose:
         </div>
 
         {/* Content */}
-        <div style={{ padding: '28px 28px 48px', flex: 1 }}>
+        <div style={{ padding: '28px 28px 48px', flex: 1, overflowY: 'auto' }}>
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={28} /></div>
           ) : !mod ? null : (
@@ -169,8 +169,8 @@ function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose:
               )}
 
               {/* Submit button — non-functional, visual only */}
-              <button className="btn btn-primary btn-lg" disabled style={{ width: '100%', opacity: 0.5, cursor: 'default' }}>
-                Mark complete & submit
+              <button className="btn btn-primary btn-lg" disabled style={{ width: '100%', opacity: 0.55, cursor: 'default', marginTop: 8 }}>
+                Mark complete &amp; submit
               </button>
             </>
           )}
