@@ -183,7 +183,7 @@ function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose:
 
 function ModuleEditor({
   initial, domains: initialDomains, onSave, onCancel, saving, onDomainCreated, existingTitles,
-  onPendingChecklist, onPendingMedia, onApplyProposedSteps,
+  onPendingMedia, onApplyProposedSteps,
 }: {
   initial?: Partial<ModuleSkill>;
   domains: Domain[];
