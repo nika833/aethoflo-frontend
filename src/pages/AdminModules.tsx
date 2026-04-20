@@ -161,8 +161,15 @@ function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose:
                 </section>
               )}
 
+              {/* Sparse module hint — only shows when no body content exists */}
+              {!mod.why_it_matters && !mod.context_note && mod.media.length === 0 && (!mod.checklist || mod.checklist.items.length === 0) && (
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic', marginBottom: 24 }}>
+                  No additional content — add Why it matters, a context note, or a checklist in the editor.
+                </p>
+              )}
+
               {/* Submit button — non-functional, visual only */}
-              <button className="btn btn-primary btn-lg" style={{ width: '100%', opacity: 0.6, pointerEvents: 'none', marginTop: 8 }}>
+              <button className="btn btn-primary btn-lg" style={{ width: '100%', pointerEvents: 'none', marginTop: 8 }}>
                 Mark complete &amp; submit
               </button>
             </>
