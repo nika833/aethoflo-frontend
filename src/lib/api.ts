@@ -214,6 +214,8 @@ export const magicLinkApi = {
     api.post('/magic-link/generate', { user_id: userId }).then((r) => r.data as { url: string; token: string }),
   redeem: (token: string) =>
     api.post('/magic-link/redeem', { token }).then((r) => r.data as { token: string; user: { id: string; email: string; display_name: string; role: string; org: string } }),
+  request: (email: string) =>
+    api.post('/magic-link/request', { email }).then((r) => r.data as { message: string }),
 };
 
 export const exportsApi = {
