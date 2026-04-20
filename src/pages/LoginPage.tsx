@@ -83,7 +83,7 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <img src="/logo.svg" alt="AethoFlo" style={{ height: 56, width: 'auto', marginBottom: 10 }} />
           <p style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
-            Roadmap-based training delivery
+            Unlock your next opportunity
           </p>
         </div>
 
