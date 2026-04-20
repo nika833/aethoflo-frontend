@@ -233,7 +233,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
   const [error, setError] = useState('');
   const [weekCount, setWeekCount] = useState(MIN_WEEKS);
   const [picker, setPicker] = useState<{ week: number; domainId: string | null; domainName: string } | null>(null);
-  const [dragSource, setDragSource] = useState<{ rmId: string } | null>(null);
+  const [dragSource, setDragSource] = useState<{ rmId: string; domainId: string | null } | null>(null);
   const [dragTarget, setDragTarget] = useState<{ week: number; domainId: string | null } | null>(null);
   const [libraryDrag, setLibraryDrag] = useState<ModuleSkill | null>(null);
   const [scheduleDay, setScheduleDay] = useState<number | null>(roadmap.release_day_of_week);
@@ -293,9 +293,10 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
     } catch { setError('Could not remove module.'); }
   };
 
-  const moveModule = async (rmId: string, toWeek: number, toDomainId: string | null) => {
+  const moveModule = async (rmId: string, toWeek: number) => {
+    // Domain is fixed on the module — only week changes on drag
     setGridModules((prev) => prev.map((m) =>
-      m.id === rmId ? { ...m, week_number: toWeek, module_domain_id: toDomainId } : m
+      m.id === rmId ? { ...m, week_number: toWeek } : m
     ));
     setDragSource(null); setDragTarget(null); setLibraryDrag(null);
     try { await roadmapsApi.updateModule(roadmap.id, rmId, { week_number: toWeek }); }
@@ -393,12 +394,17 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
                   return (
                     <td key={week}
                       onClick={() => { if (!dragSource && !libraryDrag) setPicker({ week, domainId: row.id, domainName: row.name }); }}
-                      onDragOver={(e) => { e.preventDefault(); setDragTarget({ week, domainId: row.id }); }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        // Snap highlight to the dragged module's own domain, not the hovered row
+                        const snapDomain = libraryDrag?.domain_id ?? dragSource?.domainId ?? row.id;
+                        setDragTarget({ week, domainId: snapDomain });
+                      }}
                       onDragLeave={() => setDragTarget(null)}
                       onDrop={(e) => {
                         e.preventDefault(); setDragTarget(null);
                         if (libraryDrag) { addModule(libraryDrag, week); setLibraryDrag(null); }
-                        else if (dragSource) moveModule(dragSource.rmId, week, row.id);
+                        else if (dragSource) moveModule(dragSource.rmId, week);
                       }}
                       style={{
                         padding: 8, verticalAlign: 'top', cursor: 'pointer',
@@ -415,7 +421,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
                         {cellMods.map((mod) => (
                           <ModuleChip key={mod.id} mod={mod} repeatCount={repeatCount(mod.module_skill_id)}
                             onRemove={() => removeModule(mod.id)}
-                            onDragStart={(e) => { e.stopPropagation(); setDragSource({ rmId: mod.id }); }}
+                            onDragStart={(e) => { e.stopPropagation(); setDragSource({ rmId: mod.id, domainId: mod.module_domain_id }); }}
                           />
                         ))}
                         {cellMods.length === 0 && !isTarget && (
