@@ -65,7 +65,6 @@ export default function LearnerModulePage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
-  const [note, setNote] = useState('');
   const [responses, setResponses] = useState<Record<string, { bool?: boolean; text?: string; number?: number }>>({});
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -119,7 +118,6 @@ export default function LearnerModulePage() {
         : [];
 
       await learnerProgressApi.submitModule(roadmapModuleId, {
-        learner_note: note || null,
         checklist_template_id: mod.checklist?.id ?? null,
         responses: responseItems,
         feedback_rating: feedbackRating,
@@ -216,21 +214,6 @@ export default function LearnerModulePage() {
               rows={4}
             />
           </div>
-        </div>
-
-        {/* Learner note */}
-        <div className="form-group" style={{ marginBottom: 24 }}>
-          <label className="form-label">
-            Private notes
-            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 6 }}>optional · only visible to you</span>
-          </label>
-          <textarea
-            className="form-textarea"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Questions, reminders, or anything you want to revisit..."
-            rows={2}
-          />
         </div>
 
         {error && <div style={{ marginBottom: 16 }}><Alert type="error">{error}</Alert></div>}
