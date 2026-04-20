@@ -66,6 +66,7 @@ function ModuleEditor({
     objective: savedDraft?.objective ?? initial?.objective ?? '',
     why_it_matters: savedDraft?.why_it_matters ?? initial?.why_it_matters ?? '',
     context_note: savedDraft?.context_note ?? initial?.context_note ?? '',
+    what_to_do: savedDraft?.what_to_do ?? initial?.what_to_do ?? '',
   });
   const [steps, setSteps] = useState<string[]>(savedDraft?.steps ?? []);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(savedDraft ? new Date() : null);
@@ -456,6 +457,17 @@ function ModuleEditor({
         </span>
       </div>
 
+      <div className="form-group">
+        <label className="form-label">What to do</label>
+        <textarea className="form-textarea" value={form.what_to_do}
+          onChange={(e) => set('what_to_do', e.target.value)}
+          placeholder="Step-by-step instructions or actions the learner should take..."
+          rows={3} />
+        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+          Practical instructions shown on the module page. Leave blank to hide.
+        </span>
+      </div>
+
       {isCreate && (
         <div className="form-group">
           <label className="form-label">
@@ -514,6 +526,7 @@ function ModuleEditor({
               objective: form.objective.trim() || null,
               why_it_matters: form.why_it_matters.trim() || null,
               context_note: form.context_note.trim() || null,
+              what_to_do: form.what_to_do.trim() || null,
             });
           }}>
           {saving ? <Spinner size={16} /> : (initial?.id ? 'Save changes' : 'Create module')}
