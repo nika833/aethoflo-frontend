@@ -169,7 +169,7 @@ function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose:
               )}
 
               {/* Submit button — non-functional, visual only */}
-              <button className="btn btn-primary btn-lg" disabled style={{ width: '100%', opacity: 0.55, cursor: 'default', marginTop: 8 }}>
+              <button className="btn btn-primary btn-lg" style={{ width: '100%', opacity: 0.6, pointerEvents: 'none', marginTop: 8 }}>
                 Mark complete &amp; submit
               </button>
             </>
