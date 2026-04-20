@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { domainsApi, moduleSkillsApi, roadmapsApi, assignmentsApi, usersApi } from '../lib/api';
+import { domainsApi, moduleSkillsApi, roadmapsApi, assignmentsApi, usersApi, adminStatsApi } from '../lib/api';
 import { Spinner } from '../components/ui';
 
 interface Domain { id: string; name: string; }
@@ -16,6 +16,13 @@ interface Stats {
   roadmaps: number;
   assignments: number;
   learners: number;
+}
+
+interface ActivityStats {
+  active_learners_month: number;
+  completions_week: number;
+  avg_completion_rate: number;
+  modules_no_completions: number;
 }
 
 const StatCard = ({
@@ -102,6 +109,8 @@ function IssueRow({ icon, text, count }: { icon: string; text: string; count: nu
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats>({ domains: 0, modules: 0, roadmaps: 0, assignments: 0, learners: 0 });
+  const [activityStats, setActivityStats] = useState<ActivityStats | null>(null);
+  const [activityLoading, setActivityLoading] = useState(true);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [modules, setModules] = useState<ModuleSkill[]>([]);
   const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
@@ -127,6 +136,11 @@ export default function AdminDashboard() {
         learners: users.filter((u: { role: string }) => u.role === 'learner').length,
       });
     }).finally(() => setLoading(false));
+
+    adminStatsApi.get()
+      .then(setActivityStats)
+      .catch(() => {})
+      .finally(() => setActivityLoading(false));
   }, []);
 
   // Health calculations
@@ -146,12 +160,6 @@ export default function AdminDashboard() {
   const started = { domains: domains.length > 0, modules: modules.length > 0, roadmaps: roadmaps.length > 0 };
   const allStarted = started.domains && started.modules && started.roadmaps;
 
-  const quickActions = [
-    { label: 'Create a module', desc: 'Add a new training module skill', to: '/admin/modules', icon: '⊟' },
-    { label: 'Build a roadmap', desc: 'Sequence modules into a learning path', to: '/admin/roadmaps', icon: '⟶' },
-    { label: 'Assign training', desc: 'Connect learners to roadmaps', to: '/admin/assignments', icon: '◎' },
-    { label: 'Export data', desc: 'Download learner progress as CSV', to: '/admin/exports', icon: '↓' },
-  ];
 
   return (
     <div className="animate-fade-up">
@@ -243,18 +251,49 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Quick actions */}
+      {/* Activity stats */}
       <div style={{ marginBottom: 12 }}>
         <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
           letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16 }}>
-          Quick actions
+          Activity
         </h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-          {quickActions.map((a) => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+          {[
+            {
+              label: 'Active learners',
+              sublabel: 'last 30 days',
+              value: activityStats?.active_learners_month ?? 0,
+              icon: '◈',
+              to: '/admin/assignments',
+            },
+            {
+              label: 'Completions',
+              sublabel: 'this week',
+              value: activityStats?.completions_week ?? 0,
+              icon: '✓',
+              to: '/admin/exports',
+            },
+            {
+              label: 'Avg completion',
+              sublabel: 'across all roadmaps',
+              value: activityStats ? `${activityStats.avg_completion_rate}%` : '—',
+              icon: '◉',
+              to: '/admin/assignments',
+              raw: true,
+            },
+            {
+              label: 'Modules not yet completed',
+              sublabel: 'by anyone',
+              value: activityStats?.modules_no_completions ?? 0,
+              icon: '📭',
+              to: '/admin/modules',
+              warn: (activityStats?.modules_no_completions ?? 0) > 0,
+            },
+          ].map((card) => (
             <div
-              key={a.to}
+              key={card.label}
               className="card"
-              onClick={() => navigate(a.to)}
+              onClick={() => navigate(card.to)}
               style={{ padding: '16px 18px', cursor: 'pointer' }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent-mid)';
@@ -265,11 +304,22 @@ export default function AdminDashboard() {
                 (e.currentTarget as HTMLDivElement).style.background = '';
               }}
             >
-              <div style={{ fontSize: 20, marginBottom: 8 }}>{a.icon}</div>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3, color: 'var(--text-primary)' }}>
-                {a.label}
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{a.desc}</div>
+              <div style={{ fontSize: 18, marginBottom: 10 }}>{card.icon}</div>
+              {activityLoading ? (
+                <div style={{ height: 32, display: 'flex', alignItems: 'center' }}><Spinner size={18} /></div>
+              ) : (
+                <div style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '1.75rem',
+                  lineHeight: 1,
+                  marginBottom: 4,
+                  color: card.warn ? '#B45309' : 'var(--text-primary)',
+                }}>
+                  {card.value}
+                </div>
+              )}
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 2 }}>{card.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{card.sublabel}</div>
             </div>
           ))}
         </div>

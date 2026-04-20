@@ -9,7 +9,6 @@
   <g clip-path="url(#logo-dark-clip)">
     <circle cx="74" cy="46" r="32" fill="#FAF5EF"/>
   </g>
-  <!-- Wordmark: white "aetho", orange italic "flo" -->
-  <text x="118" y="64" font-family="'Source Serif 4', 'Iowan Old Style', Georgia, serif" font-size="38" font-weight="400" letter-spacing="-0.02em" fill="rgba(255,255,255,0.9)">aetho</text>
-  <text x="192" y="64" font-family="'Source Serif 4', 'Iowan Old Style', Georgia, serif" font-size="38" font-weight="400" font-style="italic" letter-spacing="-0.02em" fill="#E87A4E">flo</text>
+  <!-- Wordmark: single text element prevents font-fallback overlap -->
+  <text x="118" y="64" font-family="'Source Serif 4', 'Iowan Old Style', Georgia, serif" font-size="38" font-weight="400" letter-spacing="-0.02em" fill="rgba(255,255,255,0.9)">aetho<tspan font-style="italic" fill="#E87A4E">flo</tspan></text>
 </svg>

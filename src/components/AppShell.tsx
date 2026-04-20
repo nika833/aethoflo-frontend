@@ -16,7 +16,7 @@ const LEARNER_NAV = [
   { to: '/learner/progress', label: 'Progress',    icon: '◉' },
 ];
 
-const SIDEBAR_BG = '#3A2215';
+const SIDEBAR_BG = '#5C3520';
 const BORDER_COLOR = 'rgba(255,255,255,0.08)';
 
 export default function AppShell() {

@@ -196,6 +196,15 @@ export const analyzeApi = {
   },
 };
 
+export const adminStatsApi = {
+  get: () => api.get('/admin/stats').then((r) => r.data as {
+    active_learners_month: number;
+    completions_week: number;
+    avg_completion_rate: number;
+    modules_no_completions: number;
+  }),
+};
+
 export const exportsApi = {
   download: async (exportType: string) => {
     const response = await api.post('/exports/download', { export_type: exportType }, {
