@@ -187,12 +187,11 @@ function ModuleEditor({
 }: {
   initial?: Partial<ModuleSkill>;
   domains: Domain[];
-  onSave: (d: Record<string, unknown>) => void;
+  onSave: (d: Record<string, unknown>, steps: string[]) => void;
   onCancel: () => void;
   saving: boolean;
   onDomainCreated?: (d: Domain) => void;
   existingTitles: string[];
-  onPendingChecklist?: (items: string[]) => void;
   onPendingMedia?: (pm: PendingMedia) => void;
   onApplyProposedSteps?: (steps: string[]) => Promise<void>;
 }) {
@@ -653,7 +652,6 @@ function ModuleEditor({
         <button type="button" className="btn btn-primary" disabled={!form.title.trim() || saving}
           onClick={() => {
             const validSteps = steps.map((s) => s.trim()).filter(Boolean);
-            if (validSteps.length) onPendingChecklist?.(validSteps);
             clearDraft();
             onSave({
               title: form.title.trim(),
@@ -662,7 +660,7 @@ function ModuleEditor({
               why_it_matters: form.why_it_matters.trim() || null,
               context_note: form.context_note.trim() || null,
               what_to_do: form.what_to_do.trim() || null,
-            });
+            }, validSteps);
           }}>
           {saving ? <Spinner size={16} /> : (initial?.id ? 'Save changes' : 'Create module')}
         </button>
@@ -816,7 +814,6 @@ export default function AdminModules() {
   const [saving, setSaving] = useState(false);
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [pendingChecklist, setPendingChecklist] = useState<string[]>([]);
   const [pendingSmartMedia, setPendingSmartMedia] = useState<PendingMedia | null>(null);
   const [justCreated, setJustCreated] = useState(false);
   const [checklistRefreshKey, setChecklistRefreshKey] = useState(0);
@@ -864,14 +861,12 @@ export default function AdminModules() {
 
   const closePanel = () => { setPanel(null); setEditing(null); setJustCreated(false); };
 
-  const handleCreate = async (d: Record<string, unknown>) => {
+  const handleCreate = async (d: Record<string, unknown>, steps: string[]) => {
     setSaving(true); setError('');
     try {
       const created = await moduleSkillsApi.create(d) as ModuleSkill;
       setModules((prev) => [...prev, created]);
-      // Create checklist synchronously so items exist when user opens Edit
-      const steps = [...pendingChecklist];
-      setPendingChecklist([]);
+      // Create checklist with steps passed directly — avoids stale-closure bug with state
       if (steps.length) {
         const t = await checklistsApi.createTemplate(created.id, { title: 'Completion Checklist' });
         await Promise.all(
@@ -879,6 +874,7 @@ export default function AdminModules() {
             checklistsApi.addItem(t.id, { label, item_type: 'checkbox', is_required: true, display_order: i })
           )
         );
+        setModules((prev) => prev.map((m) => m.id === created.id ? { ...m, checklist_count: 1 } : m));
       }
       // Attach smart fill file as media in background (non-critical)
       if (pendingSmartMedia) {
@@ -894,12 +890,16 @@ export default function AdminModules() {
     } finally { setSaving(false); }
   };
 
-  const handleEdit = async (d: Record<string, unknown>) => {
+  const handleEdit = async (d: Record<string, unknown>, _steps: string[]) => {
     if (!editing) return;
     setSaving(true); setError('');
     try {
       const updated = await moduleSkillsApi.update(editing.id, d);
-      setModules((prev) => prev.map((m) => m.id === editing.id ? { ...m, ...updated } : m));
+      // PATCH RETURNING * has no domain join — restore domain_name from local domains list
+      const domain = domains.find((dom) => dom.id === updated.domain_id);
+      setModules((prev) => prev.map((m) =>
+        m.id === editing.id ? { ...m, ...updated, domain_name: domain?.name ?? null } : m
+      ));
       closePanel();
     } catch { setError('Could not update module.'); }
     finally { setSaving(false); }
@@ -1083,7 +1083,6 @@ export default function AdminModules() {
           onCancel={closePanel} saving={saving}
           existingTitles={moduleTitles}
           onDomainCreated={(d) => setDomains((prev) => [...prev, d])}
-          onPendingChecklist={setPendingChecklist}
           onPendingMedia={setPendingSmartMedia} />
       </SlideOver>
 
@@ -1113,6 +1112,7 @@ export default function AdminModules() {
                 analyzeApi.registerMedia(pm.key, editing.id, pm.originalName, pm.mimeType).catch(() => {});
               }}
               onApplyProposedSteps={handleApplyProposedSteps} />
+
             <div style={{ borderTop: '1px solid var(--border-light)', marginTop: 8, paddingTop: 24 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 2 }}>
                 Supplementary materials
@@ -1126,7 +1126,7 @@ export default function AdminModules() {
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 12 }}>
                 Completion checklist
               </div>
-              <ChecklistSection moduleId={editing.id} autoItems={pendingChecklist.length ? pendingChecklist : undefined} refreshKey={checklistRefreshKey} />
+              <ChecklistSection moduleId={editing.id} refreshKey={checklistRefreshKey} />
             </div>
           </div>
         )}
