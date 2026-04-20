@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { assignmentsApi, usersApi, roadmapsApi, magicLinkApi, learnerProgressApi } from '../lib/api';
 import { Modal, SlideOver, EmptyState, PageHeader, Alert, Spinner, StatusBadge } from '../components/ui';
 
-interface User { id: string; display_name: string; email: string; role: string; }
+interface User { id: string; display_name: string; email: string; role: string; group_label: string | null; }
 interface Roadmap { id: string; title: string; }
 interface Assignment {
   id: string; learner_name: string; learner_email: string;
@@ -11,6 +11,7 @@ interface Assignment {
   activation_date: string | null; trigger_source: string | null;
   completed_modules: number; total_modules: number;
   allow_early_release: boolean;
+  learner_group_label: string | null;
 }
 interface ModuleProgress {
   id: string; title: string; status: string;
@@ -19,14 +20,16 @@ interface ModuleProgress {
 
 // ─── Add Learner Form ─────────────────────────────────────────────────────────
 
-function AddLearnerForm({ roadmaps, onDone, onCancel }: {
+function AddLearnerForm({ roadmaps, existingGroups, onDone, onCancel }: {
   roadmaps: Roadmap[];
+  existingGroups: string[];
   onDone: (assignment: Assignment) => void;
   onCancel: () => void;
 }) {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [groupLabel, setGroupLabel] = useState('');
   const [roadmapId, setRoadmapId] = useState('');
   const [activationDate, setActivationDate] = useState('');
   const [saving, setSaving] = useState(false);
@@ -41,6 +44,7 @@ function AddLearnerForm({ roadmaps, onDone, onCancel }: {
       const created = await usersApi.create({
         display_name: displayName.trim(), email: email.trim(),
         phone_number: phone.trim() || null, role: 'learner',
+        group_label: groupLabel.trim() || null,
       });
       const assignment = await assignmentsApi.create({
         learner_id: created.id, roadmap_id: roadmapId,
@@ -53,6 +57,7 @@ function AddLearnerForm({ roadmaps, onDone, onCancel }: {
         learner_name: created.display_name, learner_email: created.email,
         roadmap_title: roadmaps.find((r) => r.id === roadmapId)?.title ?? '',
         completed_modules: 0, total_modules: 0,
+        learner_group_label: created.group_label ?? null,
       });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -120,6 +125,14 @@ function AddLearnerForm({ roadmaps, onDone, onCancel }: {
         <label className="form-label">Phone number <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>(optional)</span></label>
         <input type="tel" className="form-input" value={phone}
           onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 000-0000" />
+      </div>
+      <div className="form-group">
+        <label className="form-label">Group <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>(optional — e.g. Sales, New Hires)</span></label>
+        <input list="add-learner-groups" className="form-input" value={groupLabel}
+          onChange={(e) => setGroupLabel(e.target.value)} placeholder="Type or select a group" />
+        <datalist id="add-learner-groups">
+          {existingGroups.map((g) => <option key={g} value={g} />)}
+        </datalist>
       </div>
       <div className="form-group">
         <label className="form-label">Roadmap <span style={{ color: 'var(--accent)' }}>*</span></label>
@@ -304,6 +317,12 @@ function LearnerDetail({ assignment, onClose, onActivate, onRemove, onEarlyRelea
             padding: '4px 10px', borderRadius: 'var(--radius-full)' }}>
             Enrolled {new Date(assignment.created_at).toLocaleDateString()}
           </span>
+          {assignment.learner_group_label && (
+            <span style={{ fontSize: 12, background: '#F3F0FF', color: '#7C3AED',
+              padding: '4px 10px', borderRadius: 'var(--radius-full)', fontWeight: 500 }}>
+              {assignment.learner_group_label}
+            </span>
+          )}
         </div>
 
         {/* Progress bar */}
@@ -440,6 +459,7 @@ export default function AdminAssignments() {
   const [search, setSearch] = useState('');
   const [filterRoadmap, setFilterRoadmap] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterGroup, setFilterGroup] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
 
   const load = () => Promise.all([
@@ -535,12 +555,15 @@ export default function AdminAssignments() {
     return 'awaiting';
   };
 
+  const groups = [...new Set(assignments.map((a) => a.learner_group_label).filter(Boolean) as string[])].sort();
+
   const filtered = assignments
     .filter((a) => {
       if (search && !a.learner_name.toLowerCase().includes(search.toLowerCase()) &&
           !a.learner_email.toLowerCase().includes(search.toLowerCase())) return false;
       if (filterRoadmap && a.roadmap_id !== filterRoadmap) return false;
       if (filterStatus && statusOf(a) !== filterStatus) return false;
+      if (filterGroup && a.learner_group_label !== filterGroup) return false;
       return true;
     })
     .sort((a, b) => {
@@ -583,15 +606,23 @@ export default function AdminAssignments() {
             <option value="active">Active</option>
             <option value="completed">Completed</option>
           </select>
+          {groups.length > 0 && (
+            <select className="form-input form-select"
+              style={{ width: 150, flexShrink: 0, fontSize: 13, padding: '7px 12px' }}
+              value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)}>
+              <option value="">All groups</option>
+              {groups.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          )}
           <select className="form-input form-select"
             style={{ width: 140, flexShrink: 0, fontSize: 13, padding: '7px 12px' }}
             value={sortBy} onChange={(e) => setSortBy(e.target.value as 'date' | 'name')}>
             <option value="date">Newest first</option>
             <option value="name">Name A–Z</option>
           </select>
-          {(search || filterRoadmap || filterStatus) && (
+          {(search || filterRoadmap || filterStatus || filterGroup) && (
             <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, flexShrink: 0 }}
-              onClick={() => { setSearch(''); setFilterRoadmap(''); setFilterStatus(''); }}>
+              onClick={() => { setSearch(''); setFilterRoadmap(''); setFilterStatus(''); setFilterGroup(''); }}>
               Clear
             </button>
           )}
@@ -713,6 +744,13 @@ export default function AdminAssignments() {
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
                       {a.learner_email} · {a.roadmap_title}
+                      {a.learner_group_label && (
+                        <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600,
+                          background: '#F3F0FF', color: '#7C3AED',
+                          padding: '1px 7px', borderRadius: 'var(--radius-full)' }}>
+                          {a.learner_group_label}
+                        </span>
+                      )}
                     </div>
                     {a.total_modules > 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -755,7 +793,12 @@ export default function AdminAssignments() {
 
       {/* Add Learner modal */}
       <Modal isOpen={modal === 'addLearner'} onClose={() => setModal(null)} title="Add learner">
-        <AddLearnerForm roadmaps={roadmaps} onDone={handleAddLearnerDone} onCancel={() => setModal(null)} />
+        <AddLearnerForm
+          roadmaps={roadmaps}
+          existingGroups={[...new Set(users.filter(u => u.group_label).map(u => u.group_label!))].sort()}
+          onDone={handleAddLearnerDone}
+          onCancel={() => setModal(null)}
+        />
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
           <button style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)',
             fontSize: 12, cursor: 'pointer', padding: 0 }} onClick={() => setModal('assign')}>

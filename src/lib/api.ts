@@ -114,6 +114,7 @@ export const usersApi = {
   create: (d: Record<string, unknown>) => api.post('/users', d).then((r) => r.data),
   update: (id: string, d: Record<string, unknown>) =>
     api.patch(`/users/${id}`, d).then((r) => r.data),
+  groups: () => api.get('/users/groups').then((r) => r.data as string[]),
 };
 
 export const mediaApi = {
