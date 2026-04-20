@@ -6,6 +6,7 @@ import AppShell from './components/AppShell';
 import { RequireAuth } from './components/RequireAuth';
 
 import LoginPage from './pages/LoginPage';
+import MagicLinkPage from './pages/MagicLinkPage';
 import SignupPage from './pages/SignupPage';
 import EmbeddedLaunchPage from './pages/EmbeddedLaunchPage';
 import NotificationSettings from './pages/NotificationSettings';
@@ -65,6 +66,9 @@ export default function App() {
         }>
           <Route path="settings" element={<NotificationSettings />} />
         </Route>
+
+        {/* Magic link sign-in */}
+        <Route path="/join/:token" element={<MagicLinkPage />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

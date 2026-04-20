@@ -205,6 +205,13 @@ export const adminStatsApi = {
   }),
 };
 
+export const magicLinkApi = {
+  generate: (userId: string) =>
+    api.post('/magic-link/generate', { user_id: userId }).then((r) => r.data as { url: string; token: string }),
+  redeem: (token: string) =>
+    api.post('/magic-link/redeem', { token }).then((r) => r.data as { token: string; user: { id: string; email: string; display_name: string; role: string; org: string } }),
+};
+
 export const exportsApi = {
   download: async (exportType: string) => {
     const response = await api.post('/exports/download', { export_type: exportType }, {

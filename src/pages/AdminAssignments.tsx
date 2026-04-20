@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { assignmentsApi, usersApi, roadmapsApi } from '../lib/api';
+import { assignmentsApi, usersApi, roadmapsApi, magicLinkApi } from '../lib/api';
 import { Modal, EmptyState, PageHeader, Alert, Spinner, StatusBadge } from '../components/ui';
 
 interface User { id: string; display_name: string; email: string; role: string; }
@@ -11,6 +11,176 @@ interface Assignment {
   activation_date: string | null; trigger_source: string | null;
   completed_modules: number; total_modules: number;
 }
+
+// ─── Add Learner Form (create user + assign roadmap + generate magic link) ────
+
+function AddLearnerForm({
+  roadmaps, onDone, onCancel,
+}: {
+  roadmaps: Roadmap[];
+  onDone: (assignment: Assignment) => void;
+  onCancel: () => void;
+}) {
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [roadmapId, setRoadmapId] = useState('');
+  const [activationDate, setActivationDate] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [magicLinkUrl, setMagicLinkUrl] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const handleSave = async () => {
+    if (!displayName.trim() || !email.trim() || !roadmapId) return;
+    setSaving(true);
+    setError('');
+    try {
+      // 1. Create user
+      const created = await usersApi.create({
+        display_name: displayName.trim(),
+        email: email.trim(),
+        phone_number: phone.trim() || null,
+        role: 'learner',
+      });
+
+      // 2. Create assignment
+      const assignment = await assignmentsApi.create({
+        learner_id: created.id,
+        roadmap_id: roadmapId,
+        ...(activationDate ? { activation_date: activationDate } : {}),
+      });
+
+      // 3. Generate magic link (backend also fires welcome notification)
+      const { url } = await magicLinkApi.generate(created.id);
+      setMagicLinkUrl(url);
+
+      onDone({
+        ...assignment,
+        learner_name: created.display_name,
+        learner_email: created.email,
+        roadmap_title: roadmaps.find((r) => r.id === roadmapId)?.title ?? '',
+        completed_modules: 0,
+        total_modules: 0,
+      });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        ?? 'Could not add learner.';
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(magicLinkUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  // Success state
+  if (magicLinkUrl) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'var(--surface-2)', padding: '12px 16px', borderRadius: 'var(--radius-md)',
+        }}>
+          <span style={{ fontSize: 18 }}>✓</span>
+          <span style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 500 }}>
+            Learner added and roadmap assigned.
+          </span>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8, fontWeight: 500 }}>
+            Magic link — copy and send if notifications are not configured:
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+            <input
+              readOnly
+              value={magicLinkUrl}
+              style={{
+                flex: 1, fontFamily: 'monospace', fontSize: 12,
+                background: 'var(--surface-3)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)', padding: '8px 12px',
+                color: 'var(--text-primary)', minWidth: 0,
+              }}
+              onFocus={(e) => e.target.select()}
+            />
+            <button className="btn btn-secondary btn-sm" onClick={handleCopy} style={{ flexShrink: 0 }}>
+              {copied ? '✓ Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+
+        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: 0 }}>
+          Email/SMS will be sent automatically if Twilio/Resend are configured in Railway.
+        </p>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button className="btn btn-primary" onClick={onCancel}>Done</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {error && <Alert type="error">{error}</Alert>}
+
+      <div className="form-group">
+        <label className="form-label">Full name <span style={{ color: 'var(--accent)' }}>*</span></label>
+        <input type="text" className="form-input" value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="Jane Smith" autoFocus />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Email <span style={{ color: 'var(--accent)' }}>*</span></label>
+        <input type="email" className="form-input" value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="jane@company.com" />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Phone number <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>(optional)</span></label>
+        <input type="tel" className="form-input" value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+1 (555) 000-0000" />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Roadmap <span style={{ color: 'var(--accent)' }}>*</span></label>
+        <select className="form-select form-input" value={roadmapId}
+          onChange={(e) => setRoadmapId(e.target.value)}>
+          <option value="">— Select roadmap —</option>
+          {roadmaps.map((r) => (
+            <option key={r.id} value={r.id}>{r.title}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Start date <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>(optional, defaults to today)</span></label>
+        <input type="date" className="form-input" value={activationDate}
+          onChange={(e) => setActivationDate(e.target.value)} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary"
+          disabled={!displayName.trim() || !email.trim() || !roadmapId || saving}
+          onClick={handleSave}>
+          {saving ? <Spinner size={16} /> : 'Add learner'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Assign Existing Learner Form ─────────────────────────────────────────────
 
 function AssignForm({
   users, roadmaps, onSave, onCancel, saving,
@@ -68,6 +238,8 @@ function AssignForm({
   );
 }
 
+// ─── Activate Modal ───────────────────────────────────────────────────────────
+
 function ActivateModal({
   assignment, onSave, onClose, saving,
 }: {
@@ -104,6 +276,8 @@ function ActivateModal({
   );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function AdminAssignments() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -111,7 +285,7 @@ export default function AdminAssignments() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [modal, setModal] = useState<'assign' | 'activate' | null>(null);
+  const [modal, setModal] = useState<'addLearner' | 'assign' | 'activate' | null>(null);
   const [activating, setActivating] = useState<Assignment | null>(null);
 
   const load = () => Promise.all([
@@ -123,6 +297,11 @@ export default function AdminAssignments() {
   }).finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
+
+  const handleAddLearnerDone = (assignment: Assignment) => {
+    setAssignments((prev) => [assignment, ...prev]);
+    // Keep modal open to show success state with magic link
+  };
 
   const handleAssign = async (d: { learner_id: string; roadmap_id: string; activation_date?: string }) => {
     setSaving(true); setError('');
@@ -170,8 +349,8 @@ export default function AdminAssignments() {
         title="Assignments"
         subtitle="Connect learners to roadmaps and manage activation"
         action={
-          <button className="btn btn-primary" onClick={() => setModal('assign')}>
-            + Assign roadmap
+          <button className="btn btn-primary" onClick={() => setModal('addLearner')}>
+            + Add learner
           </button>
         }
       />
@@ -180,8 +359,8 @@ export default function AdminAssignments() {
 
       {assignments.length === 0 ? (
         <EmptyState icon="◎" title="No assignments yet"
-          description="Assign a roadmap to a learner to begin their training journey."
-          action={<button className="btn btn-primary" onClick={() => setModal('assign')}>Assign first roadmap</button>}
+          description="Add a learner to get started — you'll create their account, assign a roadmap, and send them a magic link in one step."
+          action={<button className="btn btn-primary" onClick={() => setModal('addLearner')}>Add first learner</button>}
         />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -246,7 +425,26 @@ export default function AdminAssignments() {
         </div>
       )}
 
-      <Modal isOpen={modal === 'assign'} onClose={() => setModal(null)} title="Assign roadmap">
+      {/* Add Learner modal — primary action */}
+      <Modal isOpen={modal === 'addLearner'} onClose={() => setModal(null)} title="Add learner">
+        <AddLearnerForm
+          roadmaps={roadmaps}
+          onDone={handleAddLearnerDone}
+          onCancel={() => setModal(null)}
+        />
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <button
+            style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)',
+              fontSize: 12, cursor: 'pointer', padding: 0 }}
+            onClick={() => setModal('assign')}
+          >
+            Assign an existing learner instead →
+          </button>
+        </div>
+      </Modal>
+
+      {/* Assign existing learner — secondary/edge case */}
+      <Modal isOpen={modal === 'assign'} onClose={() => setModal(null)} title="Assign existing learner">
         <AssignForm users={users} roadmaps={roadmaps} onSave={handleAssign}
           onCancel={() => setModal(null)} saving={saving} />
       </Modal>

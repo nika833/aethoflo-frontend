@@ -1,0 +1,13 @@
+{
+  "name": "AethoFlo",
+  "short_name": "AethoFlo",
+  "description": "Your training roadmap",
+  "start_url": "/learner",
+  "display": "standalone",
+  "background_color": "#FAF5EF",
+  "theme_color": "#E87A4E",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
