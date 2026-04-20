@@ -17,7 +17,5 @@
 
   
   
-  <text x="118" y="64" font-family="&#39;Source Serif 4&#39;, &#39;Iowan Old Style&#39;, Georgia, serif" font-size="38" font-weight="400" letter-spacing="-0.02em" fill="#2A1810">aetho</text>
-  
-  <text x="192" y="64" font-family="&#39;Source Serif 4&#39;, &#39;Iowan Old Style&#39;, Georgia, serif" font-size="38" font-weight="400" font-style="italic" letter-spacing="-0.02em" fill="#E87A4E">flo</text>
+  <text x="118" y="64" font-family="&#39;Source Serif 4&#39;, &#39;Iowan Old Style&#39;, Georgia, serif" font-size="38" font-weight="400" letter-spacing="-0.02em" fill="#2A1810">aetho<tspan font-style="italic" fill="#E87A4E">flo</tspan></text>
 </svg>
