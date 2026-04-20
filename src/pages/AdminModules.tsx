@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { moduleSkillsApi, domainsApi, checklistsApi, analyzeApi } from '../lib/api';
 import { SlideOver, EmptyState, PageHeader, Alert, Spinner, SimilarityWarning } from '../components/ui';
 import { MediaUpload } from '../components/MediaUpload';
+import MediaBlock, { MediaItem } from '../components/MediaBlock';
 
 interface Domain { id: string; name: string; }
 interface ChecklistItem {
@@ -36,6 +37,148 @@ interface PendingMedia { key: string; originalName: string; mimeType: string; }
 
 interface ProposedField { key: string; label: string; current: string; proposed: string; }
 interface AIProposal { fields: ProposedField[]; steps: string[]; pendingMedia?: PendingMedia; }
+
+interface PreviewModule {
+  id: string; title: string; objective: string | null;
+  why_it_matters: string | null; context_note: string | null; what_to_do: string | null;
+  media: MediaItem[];
+  checklist: { id: string; title: string; items: { id: string; label: string; item_type: string; is_required: boolean }[] } | null;
+}
+
+function ModulePreviewDrawer({ moduleId, onClose }: { moduleId: string; onClose: () => void }) {
+  const [mod, setMod] = useState<PreviewModule | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    moduleSkillsApi.get(moduleId)
+      .then((data) => {
+        const checklist = data.checklists?.[0] ?? null;
+        setMod({
+          id: data.id,
+          title: data.title,
+          objective: data.objective,
+          why_it_matters: data.why_it_matters,
+          context_note: data.context_note,
+          what_to_do: data.what_to_do,
+          media: data.media ?? [],
+          checklist: checklist ? { id: checklist.id, title: checklist.title, items: checklist.items ?? [] } : null,
+        });
+      })
+      .finally(() => setLoading(false));
+  }, [moduleId]);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0, zIndex: 45,
+        background: 'rgba(0,0,0,0.25)', backdropFilter: 'blur(2px)',
+      }} />
+
+      {/* Drawer */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 46,
+        width: 540, background: 'var(--surface)', overflowY: 'auto',
+        boxShadow: '-8px 0 40px rgba(0,0,0,0.14)',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        {/* Header bar */}
+        <div style={{
+          padding: '14px 20px', borderBottom: '1px solid var(--border-light)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 1,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+              color: 'var(--accent)', background: 'var(--accent-light)',
+              padding: '3px 8px', borderRadius: 6,
+            }}>Learner view</span>
+            <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Preview only — no changes saved</span>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ fontSize: 18, lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: '28px 28px 48px', flex: 1 }}>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={28} /></div>
+          ) : !mod ? null : (
+            <>
+              <h2 style={{ marginBottom: 8, fontSize: '1.4rem' }}>{mod.title}</h2>
+              {mod.objective && (
+                <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 28 }}>
+                  {mod.objective}
+                </p>
+              )}
+
+              {mod.media.length > 0 && (
+                <section style={{ marginBottom: 28 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
+                    letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>Resources</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {mod.media.map((item) => <MediaBlock key={item.id} item={item} />)}
+                  </div>
+                </section>
+              )}
+
+              {mod.why_it_matters && (
+                <section className="card card-padded" style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Why it matters</div>
+                  <p style={{ fontSize: 14 }}>{mod.why_it_matters}</p>
+                </section>
+              )}
+
+              {mod.context_note && (
+                <section style={{
+                  marginBottom: 20, background: 'var(--accent-light)',
+                  border: '1px solid var(--accent-mid)', borderRadius: 'var(--radius-md)', padding: '14px 16px',
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent-dark)',
+                    letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>A note for you</div>
+                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>{mod.context_note}</p>
+                </section>
+              )}
+
+              {mod.what_to_do && (
+                <section className="card card-padded" style={{ marginBottom: 28 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>What to do</div>
+                  <p style={{ fontSize: 14 }}>{mod.what_to_do}</p>
+                </section>
+              )}
+
+              {mod.checklist && mod.checklist.items.length > 0 && (
+                <section style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
+                    letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
+                    {mod.checklist.title}
+                  </div>
+                  <div className="card card-padded" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {mod.checklist.items.map((item) => (
+                      <label key={item.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'default', opacity: 0.75 }}>
+                        <input type="checkbox" disabled
+                          style={{ marginTop: 2, accentColor: 'var(--accent)', width: 16, height: 16 }} />
+                        <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                          {item.label}
+                          {item.is_required && <span style={{ color: 'var(--accent)', marginLeft: 2 }}>*</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Submit button — non-functional, visual only */}
+              <button className="btn btn-primary btn-lg" disabled style={{ width: '100%', opacity: 0.5, cursor: 'default' }}>
+                Mark complete & submit
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
 
 function ModuleEditor({
   initial, domains: initialDomains, onSave, onCancel, saving, onDomainCreated, existingTitles,
@@ -687,6 +830,7 @@ export default function AdminModules() {
   const [checklistRefreshKey, setChecklistRefreshKey] = useState(0);
   const [panel, setPanel] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<ModuleSkill | null>(null);
+  const [previewing, setPreviewing] = useState<string | null>(null);
   const [filterDomain, setFilterDomain] = useState('');
   const [expandedIssues, setExpandedIssues] = useState<string | null>(null);
 
@@ -876,6 +1020,9 @@ export default function AdminModules() {
                     {duplicating === mod.id ? <Spinner size={12} /> : '⎘ Duplicate'}
                   </button>
                   <button className="btn btn-secondary btn-sm"
+                    onClick={() => setPreviewing(mod.id)}
+                    title="Preview as learner">Preview</button>
+                  <button className="btn btn-secondary btn-sm"
                     onClick={() => { setEditing(mod); setPanel('edit'); }}>Edit</button>
                   <button className="btn btn-danger btn-sm" onClick={() => handleDelete(mod.id)}>Archive</button>
                 </div>
@@ -973,6 +1120,10 @@ export default function AdminModules() {
           </div>
         )}
       </SlideOver>
+
+      {previewing && (
+        <ModulePreviewDrawer moduleId={previewing} onClose={() => setPreviewing(null)} />
+      )}
     </div>
   );
 }
