@@ -10,6 +10,7 @@ interface Assignment {
   is_active: boolean; created_at: string;
   activation_date: string | null; trigger_source: string | null;
   completed_modules: number; total_modules: number;
+  allow_early_release: boolean;
 }
 interface ModuleProgress {
   id: string; title: string; status: string;
@@ -238,11 +239,12 @@ const STATUS_COLORS: Record<string, { bg: string; color: string; label: string }
   locked:      { bg: 'var(--surface-3)', color: 'var(--text-tertiary)', label: 'Locked' },
 };
 
-function LearnerDetail({ assignment, onClose, onActivate, onRemove }: {
+function LearnerDetail({ assignment, onClose, onActivate, onRemove, onEarlyReleaseToggle }: {
   assignment: Assignment;
   onClose: () => void;
   onActivate: () => void;
   onRemove: () => void;
+  onEarlyReleaseToggle: (val: boolean) => void;
 }) {
   const [modules, setModules] = useState<ModuleProgress[]>([]);
   const [loadingModules, setLoadingModules] = useState(true);
@@ -317,6 +319,31 @@ function LearnerDetail({ assignment, onClose, onActivate, onRemove }: {
             </div>
           </div>
         )}
+
+        {/* Early release toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 'var(--radius-md)',
+          marginBottom: 4 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Early release</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
+              Learner can access upcoming modules before their scheduled date
+            </div>
+          </div>
+          <button
+            onClick={() => onEarlyReleaseToggle(!assignment.allow_early_release)}
+            style={{
+              width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
+              background: assignment.allow_early_release ? 'var(--accent)' : 'var(--border)',
+              position: 'relative', transition: 'background 150ms', flexShrink: 0,
+            }}>
+            <span style={{
+              position: 'absolute', top: 2, left: assignment.allow_early_release ? 20 : 2,
+              width: 18, height: 18, borderRadius: '50%', background: '#fff',
+              transition: 'left 150ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </button>
+        </div>
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -404,6 +431,10 @@ export default function AdminAssignments() {
   const [modal, setModal] = useState<'addLearner' | 'assign' | 'activate' | null>(null);
   const [activating, setActivating] = useState<Assignment | null>(null);
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkActivationDate, setBulkActivationDate] = useState('');
+  const [showBulkDateInput, setShowBulkDateInput] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -460,7 +491,41 @@ export default function AdminAssignments() {
       await assignmentsApi.deactivate(id);
       setAssignments((prev) => prev.filter((a) => a.id !== id));
       if (detailAssignment?.id === id) setDetailAssignment(null);
+      setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
     } catch { setError('Could not remove assignment.'); }
+  };
+
+  const handleEarlyRelease = async (id: string, val: boolean) => {
+    try {
+      await assignmentsApi.setEarlyRelease(id, val);
+      const update = (a: Assignment) => a.id === id ? { ...a, allow_early_release: val } : a;
+      setAssignments((prev) => prev.map(update));
+      if (detailAssignment?.id === id) setDetailAssignment((prev) => prev ? update(prev) : prev);
+    } catch { setError('Could not update early release.'); }
+  };
+
+  const handleBulkEarlyRelease = async (val: boolean) => {
+    if (selected.size === 0) return;
+    setBulkSaving(true);
+    try {
+      await assignmentsApi.bulkUpdate([...selected], { allow_early_release: val });
+      setAssignments((prev) => prev.map((a) =>
+        selected.has(a.id) ? { ...a, allow_early_release: val } : a));
+      setSelected(new Set());
+    } catch { setError('Bulk update failed.'); }
+    finally { setBulkSaving(false); }
+  };
+
+  const handleBulkActivate = async () => {
+    if (!bulkActivationDate || selected.size === 0) return;
+    setBulkSaving(true);
+    try {
+      await assignmentsApi.bulkUpdate([...selected], { activation_date: bulkActivationDate });
+      setAssignments((prev) => prev.map((a) =>
+        selected.has(a.id) ? { ...a, activation_date: bulkActivationDate, trigger_source: 'manual_admin' } : a));
+      setSelected(new Set()); setShowBulkDateInput(false); setBulkActivationDate('');
+    } catch { setError('Bulk activation failed.'); }
+    finally { setBulkSaving(false); }
   };
 
   // Filter + sort
@@ -495,13 +560,13 @@ export default function AdminAssignments() {
 
       {error && <div style={{ marginBottom: 16 }}><Alert type="error">{error}</Alert></div>}
 
-      {/* Filter bar */}
+      {/* Filter bar — single row */}
       {assignments.length > 0 && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
           <input
             className="form-input"
-            style={{ flex: '1 1 180px', maxWidth: 240, fontSize: 13, padding: '7px 12px' }}
-            placeholder="Search by name or email…"
+            style={{ flex: '1 1 0', minWidth: 0, fontSize: 13, padding: '7px 12px' }}
+            placeholder="Search name or email…"
             value={search} onChange={(e) => setSearch(e.target.value)}
           />
           <select className="form-input form-select"
@@ -525,11 +590,52 @@ export default function AdminAssignments() {
             <option value="name">Name A–Z</option>
           </select>
           {(search || filterRoadmap || filterStatus) && (
-            <button className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, flexShrink: 0 }}
               onClick={() => { setSearch(''); setFilterRoadmap(''); setFilterStatus(''); }}>
-              Clear filters
+              Clear
             </button>
           )}
+        </div>
+      )}
+
+      {/* Bulk action toolbar */}
+      {selected.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          padding: '10px 16px', marginBottom: 12, borderRadius: 'var(--radius-md)',
+          background: '#FEF0E9', border: '1px solid rgba(201,107,71,0.25)',
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', marginRight: 4 }}>
+            {selected.size} selected
+          </span>
+          <button className="btn btn-secondary btn-sm"
+            onClick={() => handleBulkEarlyRelease(true)} disabled={bulkSaving}>
+            Enable early release
+          </button>
+          <button className="btn btn-secondary btn-sm"
+            onClick={() => handleBulkEarlyRelease(false)} disabled={bulkSaving}>
+            Disable early release
+          </button>
+          {showBulkDateInput ? (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="date" className="form-input"
+                style={{ fontSize: 12, padding: '5px 10px', width: 140 }}
+                value={bulkActivationDate} onChange={(e) => setBulkActivationDate(e.target.value)} />
+              <button className="btn btn-primary btn-sm" disabled={!bulkActivationDate || bulkSaving}
+                onClick={handleBulkActivate}>
+                {bulkSaving ? <Spinner size={12} /> : 'Set'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkDateInput(false)}>Cancel</button>
+            </div>
+          ) : (
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkDateInput(true)}>
+              Set activation date
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', fontSize: 12 }}
+            onClick={() => setSelected(new Set())}>
+            Deselect all
+          </button>
         </div>
       )}
 
@@ -544,19 +650,49 @@ export default function AdminAssignments() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Select all row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 6px' }}>
+            <input type="checkbox"
+              checked={filtered.length > 0 && filtered.every((a) => selected.has(a.id))}
+              onChange={(e) => {
+                if (e.target.checked) setSelected(new Set(filtered.map((a) => a.id)));
+                else setSelected(new Set());
+              }}
+              style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent)' }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+              Select all ({filtered.length})
+            </span>
+          </div>
+
           {filtered.map((a) => {
             const pct = a.total_modules > 0
               ? Math.round((a.completed_modules / a.total_modules) * 100) : 0;
             const status = statusOf(a);
+            const isSelected = selected.has(a.id);
 
             return (
               <div key={a.id} className="card"
-                onClick={() => setDetailAssignment(a)}
-                style={{ padding: '14px 20px', cursor: 'pointer', transition: 'box-shadow 120ms' }}
+                style={{
+                  padding: '14px 20px', cursor: 'pointer', transition: 'box-shadow 120ms',
+                  outline: isSelected ? '2px solid var(--accent)' : 'none',
+                  outlineOffset: -1,
+                }}
                 onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.09)')}
                 onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '')}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                  <div style={{ flex: 1 }}>
+                  <input type="checkbox" checked={isSelected}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      setSelected((prev) => {
+                        const s = new Set(prev);
+                        e.target.checked ? s.add(a.id) : s.delete(a.id);
+                        return s;
+                      });
+                    }}
+                    style={{ width: 15, height: 15, marginTop: 3, cursor: 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setDetailAssignment(a)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                       <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)' }}>
                         {a.learner_name}
@@ -568,6 +704,12 @@ export default function AdminAssignments() {
                       }}>
                         {status === 'completed' ? 'Completed' : status === 'active' ? 'Active' : 'Awaiting activation'}
                       </span>
+                      {a.allow_early_release && (
+                        <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px',
+                          borderRadius: 'var(--radius-full)', background: '#FEF3C7', color: '#D97706' }}>
+                          Early release
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
                       {a.learner_email} · {a.roadmap_title}
@@ -583,7 +725,8 @@ export default function AdminAssignments() {
                       </div>
                     )}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', flexShrink: 0, textAlign: 'right' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', flexShrink: 0, textAlign: 'right' }}
+                    onClick={() => setDetailAssignment(a)}>
                     <div>Enrolled {new Date(a.created_at).toLocaleDateString()}</div>
                     {a.activation_date && (
                       <div style={{ marginTop: 2 }}>Active from {a.activation_date}</div>
@@ -605,6 +748,7 @@ export default function AdminAssignments() {
             onClose={() => setDetailAssignment(null)}
             onActivate={() => { setActivating(detailAssignment); setModal('activate'); }}
             onRemove={() => { setDetailAssignment(null); handleDeactivate(detailAssignment.id); }}
+            onEarlyReleaseToggle={(val) => handleEarlyRelease(detailAssignment.id, val)}
           />
         )}
       </SlideOver>

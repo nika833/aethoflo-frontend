@@ -90,6 +90,10 @@ export const assignmentsApi = {
   activate: (assignmentId: string, activation_date: string) =>
     api.post(`/assignments/${assignmentId}/activate`, { activation_date }).then((r) => r.data),
   deactivate: (id: string) => api.delete(`/assignments/${id}`),
+  setEarlyRelease: (id: string, allow_early_release: boolean) =>
+    api.patch(`/assignments/${id}/early-release`, { allow_early_release }).then((r) => r.data),
+  bulkUpdate: (ids: string[], opts: { allow_early_release?: boolean; activation_date?: string }) =>
+    api.patch('/assignments/bulk', { ids, ...opts }).then((r) => r.data),
 };
 
 export const learnerProgressApi = {
