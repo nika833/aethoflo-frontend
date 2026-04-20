@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Spinner } from './ui';
 
 interface MediaFile {
@@ -47,16 +47,26 @@ export function MediaUpload({ moduleId, existingMedia = [], onUploaded }: {
   existingMedia?: { id: string; title: string | null; url: string; mime_type: string; file_size_bytes?: number }[];
   onUploaded?: () => void;
 }) {
-  const [files, setFiles] = useState<MediaFile[]>(() =>
-    existingMedia.map((m) => ({
-      id: m.id,
-      name: m.title || m.url.split('/').pop() || 'file',
-      mime_type: m.mime_type,
-      size: m.file_size_bytes ?? 0,
-      status: 'done' as const,
-      url: m.url,
-    }))
-  );
+  const [files, setFiles] = useState<MediaFile[]>([]);
+
+  // Sync existing media into file list when the prop loads (it arrives async)
+  useEffect(() => {
+    if (existingMedia.length === 0) return;
+    setFiles((prev) => {
+      const prevIds = new Set(prev.map((f) => f.id).filter(Boolean));
+      const toAdd = existingMedia
+        .filter((m) => !prevIds.has(m.id))
+        .map((m) => ({
+          id: m.id,
+          name: m.title || m.url.split('/').pop() || 'file',
+          mime_type: m.mime_type,
+          size: m.file_size_bytes ?? 0,
+          status: 'done' as const,
+          url: m.url,
+        }));
+      return toAdd.length > 0 ? [...toAdd, ...prev] : prev;
+    });
+  }, [existingMedia]);
   const [dragging, setDragging] = useState(false);
   const [recording, setRecording] = useState<'idle' | 'audio' | 'video'>('idle');
   const [recSeconds, setRecSeconds] = useState(0);
