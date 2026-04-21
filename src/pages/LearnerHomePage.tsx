@@ -28,9 +28,12 @@ interface LearnerHomeData {
   stats: { total: number; completed: number; available: number; locked: number };
 }
 
+const WELCOME_KEY = 'aethoflo_learner_welcomed';
+
 export default function LearnerHomePage() {
   const [data, setData] = useState<LearnerHomeData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,6 +41,11 @@ export default function LearnerHomePage() {
       .then(setData)
       .finally(() => setLoading(false));
   }, []);
+
+  const dismissWelcome = () => {
+    localStorage.setItem(WELCOME_KEY, 'true');
+    setShowWelcome(false);
+  };
 
   if (loading) {
     return (
@@ -62,6 +70,46 @@ export default function LearnerHomePage() {
 
   return (
     <div className="animate-fade-up" style={{ maxWidth: 680 }}>
+
+      {/* First-login welcome card */}
+      {showWelcome && data?.assignment && (
+        <div style={{
+          background: 'var(--accent-light)',
+          border: '1px solid var(--accent-mid)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '20px 24px',
+          marginBottom: 28,
+          position: 'relative',
+        }}>
+          <button onClick={dismissWelcome} style={{
+            position: 'absolute', top: 12, right: 14,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-tertiary)', fontSize: 20, lineHeight: 1, padding: 0,
+          }}>×</button>
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 4 }}>
+            Welcome, {data.assignment.roadmap_title ? `here's how this works` : `let's get started`}
+          </div>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.6 }}>
+            Your roadmap is a sequence of focused modules — each one builds on the last. Work through them at your own pace.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { icon: '⊟', text: 'Each module has a short video or resource, plus a quick check-in at the end.' },
+              { icon: '◉', text: 'Track your progress on the Progress tab anytime.' },
+              { icon: '◈', text: 'Your link logs you in automatically — bookmark it so you can come back easily.' },
+            ].map(({ icon, text }) => (
+              <div key={icon} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+                <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{text}</span>
+              </div>
+            ))}
+          </div>
+          <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={dismissWelcome}>
+            Got it — let's go →
+          </button>
+        </div>
+      )}
+
       {/* Roadmap header */}
       <div style={{ marginBottom: 32 }}>
         <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)',
