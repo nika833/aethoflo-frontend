@@ -227,58 +227,32 @@ function StreakWidget({ modules }: { modules: ModuleWithStatus[] }) {
     return { wk, active: completedWeeks.has(wk), isCurrent: wk === currentWeekStr };
   });
 
-  const msg = streak === 0
-    ? 'Complete a module to start your streak'
-    : streak === 1 ? "You're on your way — keep going this week"
-    : streak < 4 ? `${streak} weeks strong — you're building momentum`
-    : `${streak} weeks and counting — you're on a roll ◉`;
-
   return (
-    <div style={{
-      background: 'var(--surface-2)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-lg)',
-      padding: '16px 18px',
-      marginBottom: 14,
-    }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 10 }}>
-        Activity
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', lineHeight: 1, color: streak > 0 ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-          {streak}
-        </span>
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>week streak</span>
-      </div>
-      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 14px', lineHeight: 1.5 }}>{msg}</p>
-
-      {/* 8-week activity grid */}
-      <div style={{ display: 'flex', gap: 3 }}>
+    <div style={{ padding: '14px 2px 0' }}>
+      {/* Activity bars */}
+      <div style={{ display: 'flex', gap: 3, marginBottom: 3 }}>
         {weeks.map((w, i) => (
           <div key={i} title={w.wk} style={{
-            flex: 1, height: 18, borderRadius: 3,
+            flex: 1, height: 14, borderRadius: 3,
             background: w.active ? 'var(--accent)' : w.isCurrent ? 'var(--accent-light)' : 'var(--surface-3)',
             border: w.isCurrent ? '1px solid var(--accent-mid)' : '1px solid transparent',
           }} />
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+      {/* Labels + streak inline */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>8 wks ago</span>
-        <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>This week</span>
+        <span style={{ fontSize: 10, color: streak > 0 ? 'var(--accent)' : 'var(--text-tertiary)', fontWeight: streak > 0 ? 600 : 400 }}>
+          {streak > 0 ? `${streak}-week streak` : 'no streak yet'}
+        </span>
+        <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>now</span>
       </div>
-
-      {/* Stats row */}
-      <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', justifyContent: 'space-around' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{completed.length}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>completed</div>
+      {/* Completed count */}
+      {completed.length > 0 && (
+        <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center' }}>
+          {completed.length} module{completed.length !== 1 ? 's' : ''} completed · {completedWeeks.size} active week{completedWeeks.size !== 1 ? 's' : ''}
         </div>
-        <div style={{ width: 1, background: 'var(--border)' }} />
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{completedWeeks.size}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>active weeks</div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -570,19 +544,15 @@ export default function LearnerHomePage() {
           )}
         </div>
 
-        {/* Right: Streak + Calendar */}
+        {/* Right: Calendar + Streak */}
         <div style={{ width: 280, flexShrink: 0 }}>
           <div style={{ position: 'sticky', top: 24 }}>
+            <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)',
+              letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
+              Release Schedule
+            </p>
+            <MiniCalendar modules={modules} />
             <StreakWidget modules={modules} />
-            {hasCalendarData && (
-              <>
-                <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)',
-                  letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
-                  Release Schedule
-                </p>
-                <MiniCalendar modules={modules} />
-              </>
-            )}
           </div>
         </div>
       </div>

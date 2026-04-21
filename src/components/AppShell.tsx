@@ -16,6 +16,7 @@ const ADMIN_NAV = [
 const LEARNER_NAV = [
   { to: '/learner',          label: 'My Roadmap',  icon: '◈' },
   { to: '/learner/progress', label: 'Progress',    icon: '◉' },
+  { to: '/learner/saved',    label: 'Saved',       icon: '♥' },
 ];
 
 const SIDEBAR_BG = '#5C3520';
