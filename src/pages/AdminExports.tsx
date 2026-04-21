@@ -101,7 +101,7 @@ export default function AdminExports() {
       <div style={{ marginTop: 24, padding: '14px 18px', background: 'var(--surface-2)',
         borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--text-secondary)',
         border: '1px solid var(--border-light)' }}>
-        All exports are generated in real time and reflect current data. CSV only for MVP.
+        All exports are generated in real time and reflect current data.
       </div>
     </div>
   );
