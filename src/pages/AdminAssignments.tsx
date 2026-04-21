@@ -187,12 +187,13 @@ function AddLearnerForm({ roadmaps, existingGroups, onDone, onCancel, onAssignEx
 
 // ─── Assign Existing Learner Form ─────────────────────────────────────────────
 
-function AssignForm({ users, roadmaps, onSave, onCancel, saving }: {
+function AssignForm({ users, roadmaps, onSave, onCancel, saving, preselectedLearnerId }: {
   users: User[]; roadmaps: Roadmap[];
   onSave: (d: { learner_id: string; roadmap_id: string; activation_date?: string }) => void;
   onCancel: () => void; saving: boolean;
+  preselectedLearnerId?: string | null;
 }) {
-  const [learnerId, setLearnerId] = useState('');
+  const [learnerId, setLearnerId] = useState(preselectedLearnerId ?? '');
   const [roadmapId, setRoadmapId] = useState('');
   const [activationDate, setActivationDate] = useState('');
   const learners = users.filter((u) => u.role === 'learner');
@@ -597,6 +598,7 @@ export default function AdminAssignments() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [modal, setModal] = useState<'addLearner' | 'assign' | 'bulkAssign' | 'activate' | null>(null);
+  const [preselectedLearnerId, setPreselectedLearnerId] = useState<string | null>(null);
   const [activating, setActivating] = useState<Assignment | null>(null);
   const [detailAssignment, setDetailAssignment] = useState<Assignment | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -722,11 +724,24 @@ export default function AdminAssignments() {
 
   const groups = [...new Set(assignments.map((a) => a.learner_group_label).filter(Boolean) as string[])].sort();
 
+  const assignedLearnerIds = new Set(assignments.map((a) => a.learner_id));
+  const unassignedLearners = users.filter(
+    (u) => u.role === 'learner' && !assignedLearnerIds.has(u.id)
+  ).filter((u) => {
+    if (search && !u.display_name.toLowerCase().includes(search.toLowerCase()) &&
+        !u.email.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterRoadmap) return false; // unassigned have no roadmap
+    if (filterStatus && filterStatus !== 'unassigned') return false;
+    if (filterGroup && u.group_label !== filterGroup) return false;
+    return true;
+  });
+
   const filtered = assignments
     .filter((a) => {
       if (search && !a.learner_name.toLowerCase().includes(search.toLowerCase()) &&
           !a.learner_email.toLowerCase().includes(search.toLowerCase())) return false;
       if (filterRoadmap && a.roadmap_id !== filterRoadmap) return false;
+      if (filterStatus === 'unassigned') return false;
       if (filterStatus && statusOf(a) !== filterStatus) return false;
       if (filterGroup && a.learner_group_label !== filterGroup) return false;
       return true;
@@ -754,7 +769,7 @@ export default function AdminAssignments() {
       {error && <div style={{ marginBottom: 16 }}><Alert type="error">{error}</Alert></div>}
 
       {/* Filter bar — single row */}
-      {assignments.length > 0 && (
+      {(assignments.length > 0 || unassignedLearners.length > 0) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
           <input
             className="form-input"
@@ -772,6 +787,7 @@ export default function AdminAssignments() {
             style={{ width: 170, flexShrink: 0, fontSize: 13, padding: '7px 12px' }}
             value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="">All statuses</option>
+            <option value="unassigned">No roadmap</option>
             <option value="awaiting">Awaiting activation</option>
             <option value="active">Active</option>
             <option value="completed">Completed</option>
@@ -840,18 +856,49 @@ export default function AdminAssignments() {
         </div>
       )}
 
-      {assignments.length === 0 ? (
+      {assignments.length === 0 && unassignedLearners.length === 0 ? (
         <EmptyState icon="◎" title="No assignments yet"
           description="Add a learner to get started — you'll create their account, assign a roadmap, and send them a magic link in one step."
           action={<button className="btn btn-primary" onClick={() => setModal('addLearner')}>Add first learner</button>}
         />
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && unassignedLearners.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-tertiary)', fontSize: 14 }}>
           No learners match your filters.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Select all row */}
+          {/* Unassigned learners */}
+          {unassignedLearners.map((u) => (
+            <div key={u.id} className="card" style={{ padding: '14px 20px', borderStyle: 'dashed' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)' }}>{u.display_name}</div>
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 7px',
+                      borderRadius: 'var(--radius-full)', background: 'var(--surface-3)', color: 'var(--text-tertiary)' }}>
+                      No roadmap
+                    </span>
+                    {u.group_label && (
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 7px',
+                        borderRadius: 'var(--radius-full)', background: '#F3F0FF', color: '#7C3AED' }}>
+                        {u.group_label}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{u.email}</div>
+                </div>
+                <button className="btn btn-secondary btn-sm" onClick={() => {
+                  setPreselectedLearnerId(u.id);
+                  setModal('assign');
+                }}>
+                  Assign roadmap →
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Select all row — assigned only */}
+          {filtered.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 6px' }}>
             <input type="checkbox"
               checked={filtered.length > 0 && filtered.every((a) => selected.has(a.id))}
@@ -865,6 +912,7 @@ export default function AdminAssignments() {
               Select all ({filtered.length})
             </span>
           </div>
+          )}
 
           {filtered.map((a) => {
             const pct = a.total_modules > 0
@@ -979,9 +1027,10 @@ export default function AdminAssignments() {
         </div>
       </Modal>
 
-      <Modal isOpen={modal === 'assign'} onClose={() => setModal(null)} title="Assign existing learner">
+      <Modal isOpen={modal === 'assign'} onClose={() => { setModal(null); setPreselectedLearnerId(null); }} title="Assign existing learner">
         <AssignForm users={users} roadmaps={roadmaps} onSave={handleAssign}
-          onCancel={() => setModal(null)} saving={saving} />
+          onCancel={() => { setModal(null); setPreselectedLearnerId(null); }}
+          saving={saving} preselectedLearnerId={preselectedLearnerId} />
       </Modal>
 
       <Modal isOpen={modal === 'bulkAssign'} onClose={() => setModal(null)} title="Bulk assign learners">
