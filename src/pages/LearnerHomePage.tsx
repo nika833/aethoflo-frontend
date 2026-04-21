@@ -15,6 +15,14 @@ interface ModuleWithStatus {
   completed_at: string | null;
 }
 
+interface SavedModule {
+  id: string;
+  title: string;
+  objective: string | null;
+  domain_name: string | null;
+  saved_at: string;
+}
+
 interface LearnerHomeData {
   assignment: {
     id: string;
@@ -48,9 +56,7 @@ function MiniCalendar({ modules }: { modules: ModuleWithStatus[] }) {
     }
   }
 
-  const futureDates = Object.keys(releaseDates)
-    .filter(d => d >= todayStr)
-    .sort();
+  const futureDates = Object.keys(releaseDates).filter(d => d >= todayStr).sort();
 
   const initDate = futureDates.length > 0 ? new Date(futureDates[0] + 'T12:00:00') : now;
   const [viewMonth, setViewMonth] = useState(new Date(initDate.getFullYear(), initDate.getMonth(), 1));
@@ -65,90 +71,155 @@ function MiniCalendar({ modules }: { modules: ModuleWithStatus[] }) {
     return dt.getFullYear() === year && dt.getMonth() === month;
   });
 
+  // Next release countdown
+  const nextDate = futureDates[0] ? new Date(futureDates[0] + 'T12:00:00') : null;
+  const daysUntil = nextDate
+    ? Math.ceil((nextDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
   return (
-    <div style={{
-      background: 'var(--surface-2)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-lg)',
-      padding: '18px 14px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <button
-          onClick={() => setViewMonth(new Date(year, month - 1, 1))}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}
-        >‹</button>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-          {MONTH_NAMES[month]} {year}
-        </span>
-        <button
-          onClick={() => setViewMonth(new Date(year, month + 1, 1))}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}
-        >›</button>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 2 }}>
-        {DAY_NAMES.map(d => (
-          <div key={d} style={{ textAlign: 'center', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600, padding: '0 0 4px' }}>
-            {d}
+    <div>
+      {/* Next release chip */}
+      {nextDate && daysUntil !== null && daysUntil >= 0 && (
+        <div style={{
+          background: '#F5F3FF',
+          border: '1px solid #DDD6FE',
+          borderRadius: 10,
+          padding: '12px 16px',
+          marginBottom: 14,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7C3AED', marginBottom: 4 }}>
+            Next release
           </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const day = i + 1;
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const mods = releaseDates[dateStr] || [];
-          const isToday = dateStr === todayStr;
-          const hasRelease = mods.length > 0;
-          const allCompleted = hasRelease && mods.every(m => m.status === 'completed');
-
-          return (
-            <div key={day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: 3 }}>
-              <div style={{
-                width: 24, height: 24, borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10,
-                background: isToday ? 'var(--accent)' : 'transparent',
-                color: isToday ? 'white' : hasRelease ? 'var(--accent-dark)' : 'var(--text-secondary)',
-                fontWeight: isToday || hasRelease ? 600 : 400,
-              }}>
-                {day}
-              </div>
-              {hasRelease && (
-                <div style={{
-                  width: 4, height: 4, borderRadius: '50%',
-                  background: allCompleted ? 'var(--status-completed)' : 'var(--accent)',
-                  marginTop: 1,
-                }} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {upcomingInMonth.length > 0 && (
-        <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
-            Upcoming
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#4C1D95' }}>
+            {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`}
           </div>
-          {upcomingInMonth.slice(0, 5).flatMap(dateStr => {
-            const date = new Date(dateStr + 'T12:00:00');
-            return (releaseDates[dateStr] || []).map(m => (
-              <div key={m.id} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, minWidth: 32, flexShrink: 0, paddingTop: 1 }}>
-                  {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </span>
-                <span style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  {m.title}
-                </span>
-              </div>
-            ));
-          })}
+          <div style={{ fontSize: 11, color: '#6D28D9', marginTop: 2 }}>
+            {nextDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} — {(releaseDates[futureDates[0]] || [])[0]?.title}
+          </div>
         </div>
       )}
+
+      {/* Calendar card */}
+      <div style={{
+        background: '#FFFFFF',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '18px 16px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <button
+            onClick={() => setViewMonth(new Date(year, month - 1, 1))}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}
+          >‹</button>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+            {MONTH_NAMES[month]} {year}
+          </span>
+          <button
+            onClick={() => setViewMonth(new Date(year, month + 1, 1))}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}
+          >›</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 }}>
+          {DAY_NAMES.map(d => (
+            <div key={d} style={{ textAlign: 'center', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600, paddingBottom: 6 }}>
+              {d}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1;
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const mods = releaseDates[dateStr] || [];
+            const isToday = dateStr === todayStr;
+            const hasRelease = mods.length > 0;
+            const allCompleted = hasRelease && mods.every(m => m.status === 'completed');
+
+            return (
+              <div key={day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: 4 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11,
+                  background: isToday ? 'var(--accent)' : hasRelease ? 'var(--accent-light)' : 'transparent',
+                  color: isToday ? 'white' : hasRelease ? 'var(--accent-dark)' : 'var(--text-secondary)',
+                  fontWeight: isToday || hasRelease ? 600 : 400,
+                }}>
+                  {day}
+                </div>
+                {hasRelease && (
+                  <div style={{
+                    width: 4, height: 4, borderRadius: '50%',
+                    background: allCompleted ? 'var(--status-completed)' : 'var(--accent)',
+                    marginTop: 2,
+                  }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {upcomingInMonth.length > 0 && (
+          <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+              This month
+            </div>
+            {upcomingInMonth.slice(0, 5).flatMap(dateStr => {
+              const date = new Date(dateStr + 'T12:00:00');
+              return (releaseDates[dateStr] || []).map(m => (
+                <div key={m.id} style={{ display: 'flex', gap: 8, marginBottom: 7, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, minWidth: 36, flexShrink: 0, paddingTop: 1 }}>
+                    {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                    {m.title}
+                  </span>
+                </div>
+              ));
+            })}
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+// ♥ Save button
+function SaveButton({ moduleId, saved, onToggle }: { moduleId: string; saved: boolean; onToggle: (id: string, newSaved: boolean) => void }) {
+  const [loading, setLoading] = useState(false);
+  const handle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoading(true);
+    try {
+      const res = await learnerProgressApi.toggleSave(moduleId);
+      onToggle(moduleId, res.saved);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <button
+      onClick={handle}
+      disabled={loading}
+      title={saved ? 'Remove from saved' : 'Save this module'}
+      style={{
+        background: 'none', border: 'none', cursor: loading ? 'default' : 'pointer',
+        fontSize: 18, lineHeight: 1, padding: '2px 4px',
+        color: saved ? '#E11D48' : 'var(--text-tertiary)',
+        opacity: loading ? 0.5 : 1,
+        transition: 'color 150ms, transform 150ms',
+        transform: 'none',
+        flexShrink: 0,
+      }}
+      onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.2)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
+    >
+      {saved ? '♥' : '♡'}
+    </button>
   );
 }
 
@@ -157,19 +228,41 @@ export default function LearnerHomePage() {
   const [loading, setLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const [unlocking, setUnlocking] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [savedModules, setSavedModules] = useState<SavedModule[]>([]);
   const navigate = useNavigate();
 
   const fetchData = useCallback(() => {
-    learnerProgressApi.getMy()
-      .then(setData)
-      .finally(() => setLoading(false));
+    learnerProgressApi.getMy().then(setData).finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    learnerProgressApi.getSaved().then(items => {
+      setSavedIds(new Set(items.map(i => i.id)));
+      setSavedModules(items);
+    }).catch(() => {});
+  }, [fetchData]);
 
   const dismissWelcome = () => {
     localStorage.setItem(WELCOME_KEY, 'true');
     setShowWelcome(false);
+  };
+
+  const handleToggleSave = (moduleId: string, newSaved: boolean) => {
+    setSavedIds(prev => {
+      const next = new Set(prev);
+      if (newSaved) next.add(moduleId); else next.delete(moduleId);
+      return next;
+    });
+    if (!newSaved) {
+      setSavedModules(prev => prev.filter(m => m.id !== moduleId));
+    } else {
+      const mod = data?.modules.find(m => m.id === moduleId);
+      if (mod) {
+        setSavedModules(prev => [{ id: mod.id, title: mod.title, objective: mod.objective, domain_name: mod.domain_name, saved_at: new Date().toISOString() }, ...prev]);
+      }
+    }
   };
 
   const handleUnlockEarlyAccess = async () => {
@@ -207,49 +300,10 @@ export default function LearnerHomePage() {
   const earlyReleaseEnabled = assignment.allow_early_release;
 
   return (
-    <div className="animate-fade-up" style={{ maxWidth: 900 }}>
-
-      {/* First-login welcome card */}
-      {showWelcome && (
-        <div style={{
-          background: 'var(--accent-light)',
-          border: '1px solid var(--accent-mid)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '20px 24px',
-          marginBottom: 28,
-          position: 'relative',
-        }}>
-          <button onClick={dismissWelcome} style={{
-            position: 'absolute', top: 12, right: 14,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-tertiary)', fontSize: 20, lineHeight: 1, padding: 0,
-          }}>×</button>
-          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 4 }}>
-            Welcome — here's how this works
-          </div>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.6 }}>
-            Your roadmap is a sequence of focused modules — each one builds on the last. Work through them at your own pace.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              { icon: '⊟', text: 'Each module has a short video or resource, plus a quick check-in at the end.' },
-              { icon: '◉', text: 'Track your progress on the Progress tab anytime.' },
-              { icon: '◈', text: 'Your link logs you in automatically — bookmark it so you can come back easily.' },
-            ].map(({ icon, text }) => (
-              <div key={icon} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{icon}</span>
-                <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{text}</span>
-              </div>
-            ))}
-          </div>
-          <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={dismissWelcome}>
-            Got it — let's go →
-          </button>
-        </div>
-      )}
+    <div className="animate-fade-up" style={{ maxWidth: 1100 }}>
 
       {/* Two-column layout */}
-      <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
 
         {/* Left: Roadmap */}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -264,7 +318,6 @@ export default function LearnerHomePage() {
             {assignment.roadmap_description && (
               <p style={{ fontSize: 14 }}>{assignment.roadmap_description}</p>
             )}
-
             <div style={{ marginTop: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between',
                 fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
@@ -286,7 +339,6 @@ export default function LearnerHomePage() {
 
           {/* Vertical timeline */}
           <div style={{ position: 'relative' }}>
-            {/* Connecting line */}
             <div style={{
               position: 'absolute',
               left: 9, top: 20, bottom: 20,
@@ -301,31 +353,22 @@ export default function LearnerHomePage() {
                 const isLocked = mod.status === 'locked';
                 const isCompleted = mod.status === 'completed';
                 const isClickable = !isLocked;
+                const isSaved = savedIds.has(mod.id);
 
                 const circleBg = isCompleted
                   ? 'var(--status-completed)'
-                  : isCurrent
-                  ? 'var(--accent)'
-                  : isLocked
-                  ? 'var(--surface-3)'
+                  : isCurrent ? 'var(--accent)'
+                  : isLocked ? 'var(--surface-3)'
                   : 'var(--accent-light)';
-
-                const circleBorder = (!isCompleted && !isCurrent && !isLocked)
-                  ? '2px solid var(--accent)'
-                  : isLocked
-                  ? '2px solid var(--border)'
-                  : 'none';
+                const circleBorder = (!isCompleted && !isCurrent && !isLocked) ? '2px solid var(--accent)'
+                  : isLocked ? '2px solid var(--border)' : 'none';
 
                 return (
                   <div key={mod.id} style={{ position: 'relative', animationDelay: `${idx * 30}ms` }}>
-                    {/* Circle node */}
                     <div style={{
-                      position: 'absolute',
-                      left: -36,
-                      top: 16,
+                      position: 'absolute', left: -36, top: 16,
                       width: 20, height: 20, borderRadius: '50%',
-                      background: circleBg,
-                      border: circleBorder,
+                      background: circleBg, border: circleBorder,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 10, fontWeight: 700,
                       color: isCompleted ? 'white' : isCurrent ? 'white' : 'var(--text-tertiary)',
@@ -335,7 +378,6 @@ export default function LearnerHomePage() {
                       {isCompleted ? '✓' : null}
                     </div>
 
-                    {/* Module card */}
                     <div
                       className="card"
                       onClick={() => isClickable && navigate(`/learner/module/${mod.id}`)}
@@ -347,29 +389,17 @@ export default function LearnerHomePage() {
                         background: isCurrent ? 'var(--accent-light)' : undefined,
                         transition: 'transform var(--duration-base) var(--ease-out)',
                       }}
-                      onMouseEnter={isClickable ? (e) => {
-                        (e.currentTarget as HTMLDivElement).style.transform = 'translateX(3px)';
-                      } : undefined}
-                      onMouseLeave={isClickable ? (e) => {
-                        (e.currentTarget as HTMLDivElement).style.transform = '';
-                      } : undefined}
+                      onMouseEnter={isClickable ? (e) => { (e.currentTarget as HTMLDivElement).style.transform = 'translateX(3px)'; } : undefined}
+                      onMouseLeave={isClickable ? (e) => { (e.currentTarget as HTMLDivElement).style.transform = ''; } : undefined}
                     >
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           {mod.domain_name && (
-                            <div style={{
-                              fontSize: 11, fontWeight: 500, marginBottom: 3, letterSpacing: '0.04em',
-                              color: isLocked ? 'var(--text-tertiary)' : 'var(--accent-dark)',
-                            }}>
+                            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 3, letterSpacing: '0.04em', color: isLocked ? 'var(--text-tertiary)' : 'var(--accent-dark)' }}>
                               {mod.domain_name}
                             </div>
                           )}
-                          <div style={{
-                            fontWeight: isCurrent ? 600 : 500,
-                            fontSize: isCurrent ? 15 : 14,
-                            color: isLocked ? 'var(--text-secondary)' : 'var(--text-primary)',
-                            lineHeight: 1.3,
-                          }}>
+                          <div style={{ fontWeight: isCurrent ? 600 : 500, fontSize: isCurrent ? 15 : 14, color: isLocked ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.3 }}>
                             {mod.title}
                           </div>
                           {isCurrent && mod.objective && (
@@ -378,14 +408,16 @@ export default function LearnerHomePage() {
                             </p>
                           )}
                         </div>
-                        {isCompleted && (
-                          <span style={{ fontSize: 11, color: 'var(--status-completed)', fontWeight: 600, flexShrink: 0, paddingTop: 2 }}>
-                            Done
-                          </span>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          {isCompleted && (
+                            <span style={{ fontSize: 11, color: 'var(--status-completed)', fontWeight: 600, paddingTop: 2 }}>Done</span>
+                          )}
+                          {!isLocked && (
+                            <SaveButton moduleId={mod.id} saved={isSaved} onToggle={handleToggleSave} />
+                          )}
+                        </div>
                       </div>
 
-                      {/* Current module CTA */}
                       {isCurrent && (
                         <div style={{ marginTop: 12 }}>
                           <button className="btn btn-primary btn-sm">
@@ -394,12 +426,8 @@ export default function LearnerHomePage() {
                         </div>
                       )}
 
-                      {/* Locked: release date + early access */}
                       {isLocked && !earlyReleaseEnabled && (
-                        <div style={{
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          marginTop: 8, gap: 12, flexWrap: 'wrap',
-                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 12, flexWrap: 'wrap' }}>
                           <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
                             {mod.release_date_calculated
                               ? `Unlocks ${new Date(mod.release_date_calculated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
@@ -421,11 +449,35 @@ export default function LearnerHomePage() {
               })}
             </div>
           </div>
+
+          {/* Saved content section */}
+          {savedModules.length > 0 && (
+            <div style={{ marginTop: 40 }}>
+              <h4 style={{ marginBottom: 14, fontSize: 13, color: 'var(--text-secondary)',
+                fontFamily: 'var(--font-body)', fontWeight: 500, letterSpacing: '0.06em',
+                textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: '#E11D48' }}>♥</span> Saved
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {savedModules.map(m => (
+                  <div key={m.id} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {m.domain_name && (
+                        <div style={{ fontSize: 11, color: 'var(--accent-dark)', fontWeight: 500, marginBottom: 2 }}>{m.domain_name}</div>
+                      )}
+                      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{m.title}</div>
+                    </div>
+                    <SaveButton moduleId={m.id} saved={true} onToggle={handleToggleSave} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right: Calendar */}
         {hasCalendarData && (
-          <div style={{ width: 220, flexShrink: 0 }}>
+          <div style={{ width: 280, flexShrink: 0 }}>
             <div style={{ position: 'sticky', top: 24 }}>
               <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)',
                 letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
@@ -436,6 +488,53 @@ export default function LearnerHomePage() {
           </div>
         )}
       </div>
+
+      {/* Welcome card — floating bottom-right */}
+      {showWelcome && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          width: 300,
+          background: '#F5F3FF',
+          border: '1px solid #DDD6FE',
+          borderRadius: 16,
+          padding: '20px 22px',
+          boxShadow: '0 8px 32px rgba(109,40,217,0.12)',
+          zIndex: 50,
+        }}>
+          <button onClick={dismissWelcome} style={{
+            position: 'absolute', top: 12, right: 14,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#9CA3AF', fontSize: 20, lineHeight: 1, padding: 0,
+          }}>×</button>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 8 }}>
+            Welcome — here's how this works
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { icon: '⊟', text: 'Each module has a short resource plus a quick check-in at the end.' },
+              { icon: '◉', text: 'New modules release automatically — you\'ll get notified by email or text the moment they drop.' },
+              { icon: '◈', text: 'Your login link works automatically — bookmark it for quick access anytime.' },
+            ].map(({ icon, text }) => (
+              <div key={icon} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1, color: '#7C3AED' }}>{icon}</span>
+                <span style={{ fontSize: 12, color: '#3730A3', lineHeight: 1.5 }}>{text}</span>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={dismissWelcome}
+            style={{
+              marginTop: 16, width: '100%', padding: '9px 16px',
+              background: '#7C3AED', color: 'white', border: 'none',
+              borderRadius: 100, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+            }}
+          >
+            Got it — let's go →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

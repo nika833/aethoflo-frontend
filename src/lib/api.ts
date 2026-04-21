@@ -109,6 +109,10 @@ export const learnerProgressApi = {
     api.get(`/learner-progress/assignment/${assignmentId}`).then((r) => r.data),
   unlockEarlyAccess: () =>
     api.post('/learner-progress/early-access').then((r) => r.data),
+  toggleSave: (moduleId: string) =>
+    api.post(`/learner-progress/save/${moduleId}`).then((r) => r.data as { saved: boolean }),
+  getSaved: () =>
+    api.get('/learner-progress/saved').then((r) => r.data as { id: string; title: string; objective: string | null; domain_name: string | null; saved_at: string }[]),
 };
 
 export const usersApi = {

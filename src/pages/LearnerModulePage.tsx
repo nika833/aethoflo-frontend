@@ -19,6 +19,7 @@ interface ModuleDetail {
   why_it_matters: string | null; context_note: string | null;
   what_to_do: string | null; status: string;
   media: MediaItem[]; checklist: ChecklistTemplate | null;
+  is_saved?: boolean;
 }
 
 function StarRating({ value, onChange }: { value: number; onChange: (n: number) => void }) {
@@ -88,6 +89,8 @@ export default function LearnerModulePage() {
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [peerSignal, setPeerSignal] = useState<{ count: number; samples: string[] } | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [savingToggle, setSavingToggle] = useState(false);
 
   // Random per-provider, stable for this session
   const [promptIdx] = useState(() => Math.floor(Math.random() * 3));
@@ -98,6 +101,7 @@ export default function LearnerModulePage() {
     learnerProgressApi.getModule(roadmapModuleId)
       .then((data) => {
         setMod(data);
+        setSaved(data.is_saved ?? false);
         if (data.status === 'completed') setSubmitted(true);
       })
       .catch(() => setError('Could not load module.'))
@@ -353,7 +357,32 @@ export default function LearnerModulePage() {
 
       {/* Module header */}
       <div style={{ marginBottom: 32 }}>
-        <h2 style={{ marginBottom: 8 }}>{mod.title}</h2>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+          <h2 style={{ margin: 0 }}>{mod.title}</h2>
+          <button
+            onClick={async () => {
+              if (savingToggle || !roadmapModuleId) return;
+              setSavingToggle(true);
+              try {
+                const res = await learnerProgressApi.toggleSave(roadmapModuleId);
+                setSaved(res.saved);
+              } finally {
+                setSavingToggle(false);
+              }
+            }}
+            title={saved ? 'Remove from saved' : 'Save this module'}
+            style={{
+              background: 'none', border: 'none', cursor: savingToggle ? 'default' : 'pointer',
+              fontSize: 24, lineHeight: 1, padding: '4px 6px', flexShrink: 0,
+              color: saved ? '#E11D48' : 'var(--text-tertiary)',
+              opacity: savingToggle ? 0.5 : 1,
+              transition: 'color 150ms',
+              marginTop: 2,
+            }}
+          >
+            {saved ? '♥' : '♡'}
+          </button>
+        </div>
         {mod.objective && (
           <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
             {mod.objective}
