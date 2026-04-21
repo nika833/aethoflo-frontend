@@ -107,6 +107,8 @@ export const learnerProgressApi = {
       .then((r) => r.data as { count: number; samples: string[] }),
   getAssignment: (assignmentId: string) =>
     api.get(`/learner-progress/assignment/${assignmentId}`).then((r) => r.data),
+  unlockEarlyAccess: () =>
+    api.post('/learner-progress/early-access').then((r) => r.data),
 };
 
 export const usersApi = {
