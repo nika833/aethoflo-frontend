@@ -233,6 +233,14 @@ export default function AppShell() {
 
   return (
     <div style={{ minHeight: '100vh' }}>
+      {/* Backdrop — closes sidebar when tapping outside on touch devices */}
+      {expanded && (
+        <div
+          onClick={() => setHovered(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 199 }}
+        />
+      )}
+
       {/* Sidebar — fixed overlay, never pushes content */}
       <aside
         onMouseEnter={() => setHovered(true)}
@@ -271,6 +279,7 @@ export default function AppShell() {
               key={item.to}
               to={item.to}
               end={item.to === '/admin' || item.to === '/learner'}
+              onClick={() => setHovered(false)}
               style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
