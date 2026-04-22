@@ -80,6 +80,8 @@ export const roadmapsApi = {
     api.put(`/roadmaps/${roadmapId}/modules/reorder`, { order }).then((r) => r.data),
   removeModule: (roadmapId: string, moduleId: string) =>
     api.delete(`/roadmaps/${roadmapId}/modules/${moduleId}`),
+  applyWeekSchedule: (roadmapId: string) =>
+    api.post(`/roadmaps/${roadmapId}/apply-week-schedule`).then((r) => r.data),
 };
 
 export const assignmentsApi = {

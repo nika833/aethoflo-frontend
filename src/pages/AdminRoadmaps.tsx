@@ -359,6 +359,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
   const [scheduleDay, setScheduleDay] = useState<number | null>(roadmap.release_day_of_week);
   const [scheduleHour, setScheduleHour] = useState<number | null>(roadmap.release_hour);
   const [editingModule, setEditingModule] = useState<GridModule | null>(null);
+  const [applyingSchedule, setApplyingSchedule] = useState(false);
 
   useEffect(() => {
     Promise.all([roadmapsApi.get(roadmap.id), domainsApi.list(), moduleSkillsApi.list()])
@@ -399,7 +400,9 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
     try {
       const created = await roadmapsApi.addModule(roadmap.id, {
         module_skill_id: mod.id, week_number: week,
-        display_order: modulesPerWeek(week), release_rule: 'immediate',
+        display_order: modulesPerWeek(week),
+        release_rule: week <= 1 ? 'immediate' : 'days_offset',
+        release_days: week <= 1 ? null : (week - 1) * 7,
       });
       setGridModules((prev) => [...prev, {
         id: created.id, module_skill_id: created.module_skill_id,
@@ -445,13 +448,40 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
 
       {error && <div style={{ marginBottom: 12 }}><Alert type="error">{error}</Alert></div>}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <SchedulePill
           roadmapId={roadmap.id}
           initialDay={scheduleDay}
           initialHour={scheduleHour}
           onSaved={(d, h) => { setScheduleDay(d); setScheduleHour(h); }}
         />
+        <button
+          className="btn btn-secondary btn-sm"
+          disabled={applyingSchedule || gridModules.length === 0}
+          onClick={async () => {
+            if (!confirm('This will set Week 1 → immediate, Week 2 → +7d, Week 3 → +14d, etc. for all modules. Continue?')) return;
+            setApplyingSchedule(true);
+            try {
+              await roadmapsApi.applyWeekSchedule(roadmap.id);
+              // Refresh grid modules to reflect new rules
+              const rm = await roadmapsApi.get(roadmap.id);
+              setGridModules((rm.modules || []).map((m: Record<string, unknown>) => ({
+                id: m.id as string, module_skill_id: m.module_skill_id as string,
+                title: m.title as string, week_number: (m.week_number as number) || 1,
+                module_domain_id: (m.module_domain_id as string | null) ?? null,
+                domain_name: (m.domain_name as string | null) ?? null,
+                release_rule: (m.release_rule as string) || 'immediate',
+                release_days: (m.release_days as number | null) ?? null,
+                release_date: (m.release_date as string | null) ?? null,
+              })));
+            } catch { setError('Could not apply schedule.'); }
+            finally { setApplyingSchedule(false); }
+          }}
+          style={{ whiteSpace: 'nowrap' }}
+          title="Set release dates based on week position (Week 1=day 0, Week 2=+7d, Week 3=+14d…)"
+        >
+          {applyingSchedule ? <Spinner size={12} /> : '⟳ Apply week schedule'}
+        </button>
         <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
           Click any cell to add · Drag to move · Click title to edit · × to remove
         </span>
