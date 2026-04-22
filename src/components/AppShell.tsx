@@ -344,7 +344,7 @@ export default function AppShell() {
       </aside>
 
       {/* Main content — offset by collapsed sidebar width, never shifted by hover */}
-      <main style={{ marginLeft: 60, minHeight: '100vh', overflow: 'auto' }}>
+      <main style={{ marginLeft: 60, minHeight: '100vh' }}>
         <div style={{ padding: '36px 28px' }}>
           <Outlet />
         </div>
