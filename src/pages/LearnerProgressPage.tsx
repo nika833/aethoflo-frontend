@@ -39,6 +39,7 @@ export default function LearnerProgressPage() {
 
   const { modules, activation_date } = data;
   const completed = modules.filter((m) => m.status === 'completed');
+  const totalPct = modules.length > 0 ? Math.round((completed.length / modules.length) * 100) : 0;
 
   // Build activity log from started_at and completed_at events
   type ActivityEvent = { date: string; type: 'completed' | 'started'; module: ModuleWithStatus };
@@ -58,6 +59,19 @@ export default function LearnerProgressPage() {
             Training started {new Date(activation_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
         )}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+            fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
+            <span>Overall: {completed.length} of {modules.length} modules complete</span>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>{totalPct}%</span>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-bar-fill" style={{
+              width: `${totalPct}%`,
+              background: totalPct === 100 ? 'var(--status-completed)' : undefined,
+            }} />
+          </div>
+        </div>
       </div>
 
       {/* Summary row */}
