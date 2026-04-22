@@ -379,13 +379,13 @@ export default function LearnerHomePage() {
     const t2 = setTimeout(() => {
       setCalendarOpen(false);
       sessionStorage.setItem(CALENDAR_ANIMATED_KEY, '1');
-    }, 3800);
+    }, 2500);
     const t3 = setTimeout(() => {
       const activeId = data.current_module?.id ?? data.modules.find(m => m.status !== 'locked')?.id;
       if (activeId && moduleRefs.current[activeId]) {
         moduleRefs.current[activeId]!.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-    }, 4600);
+    }, 3000);
 
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, [isMobile, data]);
