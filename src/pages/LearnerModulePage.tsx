@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { learnerProgressApi } from '../lib/api';
 import { Spinner, Alert } from '../components/ui';
@@ -92,6 +92,8 @@ export default function LearnerModulePage() {
   const [saved, setSaved] = useState(false);
   const [savingToggle, setSavingToggle] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 700);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Random per-provider, stable for this session
   const [promptIdx] = useState(() => Math.floor(Math.random() * 3));
@@ -109,7 +111,13 @@ export default function LearnerModulePage() {
       .then((data) => {
         setMod(data);
         setSaved(data.is_saved ?? false);
-        // Don't enter submitted state on revisit — show content so learner can review
+        // Restore draft checklist responses from localStorage
+        if (data.status !== 'completed') {
+          const draft = localStorage.getItem(`aethoflo_draft_${roadmapModuleId}`);
+          if (draft) {
+            try { setResponses(JSON.parse(draft)); } catch {}
+          }
+        }
       })
       .catch((err: any) => {
         const status = err?.response?.status;
@@ -119,6 +127,18 @@ export default function LearnerModulePage() {
       })
       .finally(() => setLoading(false));
   }, [roadmapModuleId]);
+
+  // Autosave draft to localStorage 800ms after any response change
+  useEffect(() => {
+    if (!roadmapModuleId || Object.keys(responses).length === 0 || submitted) return;
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      localStorage.setItem(`aethoflo_draft_${roadmapModuleId}`, JSON.stringify(responses));
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+    }, 800);
+    return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
+  }, [responses, roadmapModuleId, submitted]);
 
   const handleCheckbox = (itemId: string, checked: boolean) =>
     setResponses((r) => ({ ...r, [itemId]: { bool: checked } }));
@@ -165,6 +185,7 @@ export default function LearnerModulePage() {
         feedback_prompt: currentPrompt.key,
       });
       setSubmitted(true);
+      localStorage.removeItem(`aethoflo_draft_${roadmapModuleId}`);
       // Fetch peer signal in background — non-blocking
       learnerProgressApi.peerSignal(roadmapModuleId, currentPrompt.key)
         .then((signal) => { setPeerSignal(signal); setPhase('peer'); })
@@ -378,10 +399,17 @@ export default function LearnerModulePage() {
 
   const checklistBlock = mod.checklist ? (
     <section style={{ marginBottom: 28 }}>
-      <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
-        letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
-        {mod.checklist.title}
-      </h4>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
+          letterSpacing: '0.06em', textTransform: 'uppercase', margin: 0 }}>
+          {mod.checklist.title}
+        </h4>
+        {draftSaved && (
+          <span style={{ fontSize: 11, color: 'var(--status-completed)', fontWeight: 500, animation: 'fadeUp 200ms ease both' }}>
+            ✓ Draft saved
+          </span>
+        )}
+      </div>
       <div className="card card-padded" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {mod.checklist.items.map((item) => (
           <div key={item.id}>

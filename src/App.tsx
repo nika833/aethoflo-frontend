@@ -21,6 +21,7 @@ import AdminExports from './pages/AdminExports';
 import LearnerHomePage from './pages/LearnerHomePage';
 import LearnerModulePage from './pages/LearnerModulePage';
 import LearnerProgressPage from './pages/LearnerProgressPage';
+import LearnerLibraryPage from './pages/LearnerLibraryPage';
 import LearnerSavedPage from './pages/LearnerSavedPage';
 
 function RootRedirect() {
@@ -58,6 +59,7 @@ export default function App() {
           <Route index element={<LearnerHomePage />} />
           <Route path="module/:roadmapModuleId" element={<LearnerModulePage />} />
           <Route path="progress" element={<LearnerProgressPage />} />
+          <Route path="library" element={<LearnerLibraryPage />} />
           <Route path="saved" element={<LearnerSavedPage />} />
           <Route path="settings" element={<NotificationSettings />} />
         </Route>

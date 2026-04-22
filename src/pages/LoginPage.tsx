@@ -188,8 +188,8 @@ export default function LoginPage() {
         </div>
 
         <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-tertiary)', marginTop: 20 }}>
-          Questions? Email{' '}
-          <a href="mailto:nika@corvaco.com" style={{ color: 'var(--accent)' }}>nika@corvaco.com</a>
+          Questions?{' '}
+          <a href="mailto:support@aethoflo.com" style={{ color: 'var(--accent)' }}>support@aethoflo.com</a>
         </p>
       </div>
     </div>
