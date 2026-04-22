@@ -332,14 +332,14 @@ export default function LearnerModulePage() {
 
   // ── Step 1: Module content + checklist ─────────────────────────────────────
   return (
-    <div className="animate-fade-up" style={{ maxWidth: 680 }}>
+    <div className="animate-fade-up" style={{ maxWidth: 1100, width: '100%' }}>
       <button className="btn btn-ghost btn-sm" onClick={() => navigate('/learner')}
         style={{ marginBottom: 24, color: 'var(--text-tertiary)', paddingLeft: 0 }}>
         ← Back to roadmap
       </button>
 
       {/* Step indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--accent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -355,159 +355,169 @@ export default function LearnerModulePage() {
         </div>
       </div>
 
-      {/* Module header */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-          <h2 style={{ margin: 0 }}>{mod.title}</h2>
-          <button
-            onClick={async () => {
-              if (savingToggle || !roadmapModuleId) return;
-              setSavingToggle(true);
-              try {
-                const res = await learnerProgressApi.toggleSave(roadmapModuleId);
-                setSaved(res.saved);
-              } finally {
-                setSavingToggle(false);
-              }
-            }}
-            title={saved ? 'Remove from saved' : 'Save this module'}
-            style={{
-              background: 'none', border: 'none', cursor: savingToggle ? 'default' : 'pointer',
-              fontSize: 24, lineHeight: 1, padding: '4px 6px', flexShrink: 0,
-              color: saved ? '#E11D48' : 'var(--text-tertiary)',
-              opacity: savingToggle ? 0.5 : 1,
-              transition: 'color 150ms',
-              marginTop: 2,
-            }}
-          >
-            {saved ? '♥' : '♡'}
-          </button>
-        </div>
-        {mod.objective && (
-          <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            {mod.objective}
-          </p>
-        )}
-      </div>
+      {/* Two-column layout: details left, media right */}
+      <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
-      {/* Media */}
-      {mod.media.length > 0 && (
-        <section style={{ marginBottom: 28 }}>
-          <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
-            letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
-            Resources
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {mod.media.map((item) => <MediaBlock key={item.id} item={item} />)}
+        {/* Left column — title, text sections, checklist, CTA */}
+        <div style={{ flex: '1 1 340px', minWidth: 0 }}>
+          <div style={{ marginBottom: 28 }}>
+            <h2 style={{ margin: '0 0 10px' }}>{mod.title}</h2>
+            {mod.objective && (
+              <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>
+                {mod.objective}
+              </p>
+            )}
           </div>
-        </section>
-      )}
 
-      {mod.why_it_matters && (
-        <section className="card card-padded" style={{ marginBottom: 20 }}>
-          <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Why it matters</h4>
-          <p style={{ fontSize: 14 }}>{mod.why_it_matters}</p>
-        </section>
-      )}
+          {mod.why_it_matters && (
+            <section className="card card-padded" style={{ marginBottom: 20 }}>
+              <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Why it matters</h4>
+              <p style={{ fontSize: 14 }}>{mod.why_it_matters}</p>
+            </section>
+          )}
 
-      {mod.context_note && (
-        <section style={{
-          marginBottom: 20, background: 'var(--accent-light)',
-          border: '1px solid var(--accent-mid)', borderRadius: 'var(--radius-md)', padding: '14px 16px',
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent-dark)',
-            letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>A note for you</div>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>{mod.context_note}</p>
-        </section>
-      )}
+          {mod.context_note && (
+            <section style={{
+              marginBottom: 20, background: 'var(--accent-light)',
+              border: '1px solid var(--accent-mid)', borderRadius: 'var(--radius-md)', padding: '14px 16px',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent-dark)',
+                letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>A note for you</div>
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>{mod.context_note}</p>
+            </section>
+          )}
 
-      {/* Checklist */}
-      {mod.checklist && (
-        <section style={{ marginBottom: 28 }}>
-          <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
-            letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
-            {mod.checklist.title}
-          </h4>
-          <div className="card card-padded" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {mod.checklist.items.map((item) => (
-              <div key={item.id}>
-                {item.item_type === 'checkbox' && (
-                  <label style={{ display: 'flex', gap: 12, cursor: 'pointer', alignItems: 'flex-start' }}>
-                    <input type="checkbox"
-                      checked={responses[item.id]?.bool ?? false}
-                      onChange={(e) => handleCheckbox(item.id, e.target.checked)}
-                      style={{ marginTop: 2, accentColor: 'var(--accent)', width: 16, height: 16 }} />
-                    <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>
-                      {item.label}
-                      {item.is_required && <span style={{ color: 'var(--accent)', marginLeft: 2 }}>*</span>}
-                    </span>
-                  </label>
-                )}
-                {item.item_type === 'text' && (
-                  <div className="form-group">
-                    <label className="form-label">
-                      {item.label}
-                      {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
-                    </label>
-                    {item.helper_text && (
-                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: -2 }}>{item.helper_text}</p>
+          {/* Checklist */}
+          {mod.checklist && (
+            <section style={{ marginBottom: 28 }}>
+              <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
+                letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
+                {mod.checklist.title}
+              </h4>
+              <div className="card card-padded" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {mod.checklist.items.map((item) => (
+                  <div key={item.id}>
+                    {item.item_type === 'checkbox' && (
+                      <label style={{ display: 'flex', gap: 12, cursor: 'pointer', alignItems: 'flex-start' }}>
+                        <input type="checkbox"
+                          checked={responses[item.id]?.bool ?? false}
+                          onChange={(e) => handleCheckbox(item.id, e.target.checked)}
+                          style={{ marginTop: 2, accentColor: 'var(--accent)', width: 16, height: 16 }} />
+                        <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                          {item.label}
+                          {item.is_required && <span style={{ color: 'var(--accent)', marginLeft: 2 }}>*</span>}
+                        </span>
+                      </label>
                     )}
-                    <textarea className="form-textarea"
-                      value={responses[item.id]?.text ?? ''}
-                      onChange={(e) => handleText(item.id, e.target.value)}
-                      rows={3} />
+                    {item.item_type === 'text' && (
+                      <div className="form-group">
+                        <label className="form-label">
+                          {item.label}
+                          {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
+                        </label>
+                        {item.helper_text && (
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: -2 }}>{item.helper_text}</p>
+                        )}
+                        <textarea className="form-textarea"
+                          value={responses[item.id]?.text ?? ''}
+                          onChange={(e) => handleText(item.id, e.target.value)}
+                          rows={3} />
+                      </div>
+                    )}
+                    {item.item_type === 'number' && (
+                      <div className="form-group">
+                        <label className="form-label">
+                          {item.label}
+                          {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
+                        </label>
+                        <input type="number" className="form-input"
+                          value={responses[item.id]?.number ?? ''}
+                          onChange={(e) => handleNumber(item.id, parseFloat(e.target.value))}
+                          style={{ maxWidth: 160 }} />
+                      </div>
+                    )}
+                    {item.item_type === 'rating' && (
+                      <div className="form-group">
+                        <label className="form-label">
+                          {item.label}
+                          {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
+                        </label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {[1,2,3,4,5].map((n) => (
+                            <button key={n} type="button" className="btn btn-secondary btn-sm"
+                              onClick={() => handleNumber(item.id, n)}
+                              style={{
+                                background: responses[item.id]?.number === n ? 'var(--accent)' : undefined,
+                                color: responses[item.id]?.number === n ? 'white' : undefined,
+                                borderColor: responses[item.id]?.number === n ? 'var(--accent)' : undefined,
+                              }}>{n}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-                {item.item_type === 'number' && (
-                  <div className="form-group">
-                    <label className="form-label">
-                      {item.label}
-                      {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
-                    </label>
-                    <input type="number" className="form-input"
-                      value={responses[item.id]?.number ?? ''}
-                      onChange={(e) => handleNumber(item.id, parseFloat(e.target.value))}
-                      style={{ maxWidth: 160 }} />
-                  </div>
-                )}
-                {item.item_type === 'rating' && (
-                  <div className="form-group">
-                    <label className="form-label">
-                      {item.label}
-                      {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
-                    </label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[1,2,3,4,5].map((n) => (
-                        <button key={n} type="button" className="btn btn-secondary btn-sm"
-                          onClick={() => handleNumber(item.id, n)}
-                          style={{
-                            background: responses[item.id]?.number === n ? 'var(--accent)' : undefined,
-                            color: responses[item.id]?.number === n ? 'white' : undefined,
-                            borderColor: responses[item.id]?.number === n ? 'var(--accent)' : undefined,
-                          }}>{n}</button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+            </section>
+          )}
 
-      <button
-        className="btn btn-primary btn-lg"
-        onClick={() => setPhase('feedback')}
-        disabled={!canAdvance()}
-        style={{ width: '100%' }}
-      >
-        Next: share your take →
-      </button>
-      {!canAdvance() && (
-        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
-          Complete all required checklist items to continue
-        </p>
-      )}
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={() => setPhase('feedback')}
+            disabled={!canAdvance()}
+            style={{ width: '100%' }}
+          >
+            Next: share your take →
+          </button>
+          {!canAdvance() && (
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
+              Complete all required checklist items to continue
+            </p>
+          )}
+        </div>
+
+        {/* Right column — media + heart button */}
+        <div style={{ flex: '1 1 360px', minWidth: 0 }}>
+          {/* Heart button pinned to top-right */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button
+              onClick={async () => {
+                if (savingToggle || !roadmapModuleId) return;
+                setSavingToggle(true);
+                try {
+                  const res = await learnerProgressApi.toggleSave(roadmapModuleId);
+                  setSaved(res.saved);
+                } finally {
+                  setSavingToggle(false);
+                }
+              }}
+              title={saved ? 'Remove from saved' : 'Save this module'}
+              style={{
+                background: 'none', border: 'none', cursor: savingToggle ? 'default' : 'pointer',
+                fontSize: 24, lineHeight: 1, padding: '4px 6px',
+                color: saved ? '#E11D48' : 'var(--text-tertiary)',
+                opacity: savingToggle ? 0.5 : 1,
+                transition: 'color 150ms',
+              }}
+            >
+              {saved ? '♥' : '♡'}
+            </button>
+          </div>
+
+          {mod.media.length > 0 && (
+            <section>
+              <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
+                letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
+                Resources
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {mod.media.map((item) => <MediaBlock key={item.id} item={item} />)}
+              </div>
+            </section>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
