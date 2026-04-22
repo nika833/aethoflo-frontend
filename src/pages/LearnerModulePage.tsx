@@ -113,7 +113,7 @@ export default function LearnerModulePage() {
       })
       .catch((err: any) => {
         const status = err?.response?.status;
-        if (status === 403) setError('This module hasn't been released yet. Complete the previous module to unlock it, or ask your administrator to enable early access.');
+        if (status === 403) setError("This module hasn't been released yet. Complete the previous module to unlock it, or ask your administrator to enable early access.");
         else if (status === 404) setError('Module not found. It may have been removed from your roadmap.');
         else setError('Could not load module. Check your connection and try again.');
       })
