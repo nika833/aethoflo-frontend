@@ -27,6 +27,9 @@ interface ModuleDetail {
   media: MediaItem[]; checklist: ChecklistTemplate | null;
   is_saved?: boolean;
   existing_response?: { response_items: ChecklistResponseItem[] } | null;
+  is_repeat?: boolean;
+  prior_completed_at?: string | null;
+  prior_response?: { response_items: ChecklistResponseItem[] } | null;
 }
 
 function StarRating({ value, onChange }: { value: number; onChange: (n: number) => void }) {
@@ -122,10 +125,15 @@ export default function LearnerModulePage() {
       .then((data) => {
         setMod(data);
         setSaved(data.is_saved ?? false);
-        // Restore saved checklist responses from DB
-        if (data.existing_response?.response_items?.length) {
+        // Restore checklist: own responses first, then prior completion, then localStorage draft
+        const responseSource = data.existing_response?.response_items?.length
+          ? data.existing_response.response_items
+          : data.prior_response?.response_items?.length
+          ? data.prior_response.response_items
+          : null;
+        if (responseSource) {
           const restored: Record<string, { bool?: boolean; text?: string; number?: number }> = {};
-          for (const item of data.existing_response.response_items) {
+          for (const item of responseSource) {
             restored[item.template_item_id] = {
               bool:   item.value_bool   ?? undefined,
               text:   item.value_text   ?? undefined,
@@ -134,7 +142,6 @@ export default function LearnerModulePage() {
           }
           setResponses(restored);
         } else {
-          // Fall back to localStorage draft if no DB data
           const draft = localStorage.getItem(`aethoflo_draft_${roadmapModuleId}`);
           if (draft) { try { setResponses(JSON.parse(draft)); } catch {} }
         }
@@ -540,6 +547,10 @@ export default function LearnerModulePage() {
   ) : null;
 
   const isCompleted = mod.status === 'completed';
+  const isRepeat = mod.is_repeat && !isCompleted;
+  const priorDate = mod.prior_completed_at
+    ? new Date(mod.prior_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
 
   const ctaBlock = isCompleted ? (
     <div style={{
@@ -580,6 +591,23 @@ export default function LearnerModulePage() {
         }}>
           <span style={{ fontSize: 15, color: 'var(--status-completed)' }}>✓</span>
           <span style={{ fontSize: 13, fontWeight: 500, color: '#065F46' }}>Completed — reviewing this module</span>
+        </div>
+      )}
+
+      {/* Repeat check-in banner */}
+      {isRepeat && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 24,
+          padding: '12px 16px', borderRadius: 'var(--radius-md)',
+          background: '#FFF7ED', border: '1px solid #FED7AA',
+        }}>
+          <span style={{ fontSize: 15, flexShrink: 0 }}>↻</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#92400E' }}>Repeat check-in</div>
+            <div style={{ fontSize: 12, color: '#B45309', marginTop: 2 }}>
+              You completed this module{priorDate ? ` on ${priorDate}` : ' before'}. Your previous responses are pre-filled — update anything that's changed.
+            </div>
+          </div>
         </div>
       )}
 

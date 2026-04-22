@@ -438,6 +438,14 @@ export default function LearnerHomePage() {
   const { assignment, current_module, modules, stats } = data;
   const earlyReleaseEnabled = assignment.allow_early_release;
 
+  // Detect repeat modules: skill_ids that appear more than once
+  const seenSkillIds = new Set<string>();
+  const repeatModuleIds = new Set<string>();
+  for (const m of modules) {
+    if (seenSkillIds.has(m.module_skill_id)) repeatModuleIds.add(m.id);
+    else seenSkillIds.add(m.module_skill_id);
+  }
+
   // Monthly progress — modules whose release date falls in the current calendar month
   const now = new Date();
   const monthName = now.toLocaleDateString('en-US', { month: 'long' });
@@ -703,9 +711,18 @@ export default function LearnerHomePage() {
                               {mod.domain_name}
                             </div>
                           )}
-                          <div style={{ fontWeight: isCurrent ? 600 : 500, fontSize: isCurrent ? 15 : 14,
-                            color: isLocked ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.3 }}>
-                            {mod.title}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: isCurrent ? 600 : 500, fontSize: isCurrent ? 15 : 14,
+                              color: isLocked ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.3 }}>
+                              {mod.title}
+                            </span>
+                            {repeatModuleIds.has(mod.id) && (
+                              <span style={{ fontSize: 10, fontWeight: 600, color: '#92400E',
+                                background: '#FEF3C7', border: '1px solid #FDE68A',
+                                borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
+                                ↻ Repeat
+                              </span>
+                            )}
                           </div>
                           {isCurrent && mod.objective && (
                             <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '6px 0 0', lineHeight: 1.5 }}>

@@ -61,8 +61,20 @@ export default function LearnerLibraryPage() {
     <EmptyState icon="⊟" title="No modules yet" description="Your roadmap hasn't been set up yet." />
   );
 
+  // Deduplicate by module_skill_id — keep the most relevant instance
+  // Priority: completed > in_progress > available > locked
+  const STATUS_RANK: Record<string, number> = { completed: 0, in_progress: 1, available: 2, locked: 3 };
+  const dedupedMap = new Map<string, ModuleWithStatus>();
+  for (const m of modules) {
+    const existing = dedupedMap.get(m.module_skill_id);
+    if (!existing || (STATUS_RANK[m.status] ?? 9) < (STATUS_RANK[existing.status] ?? 9)) {
+      dedupedMap.set(m.module_skill_id, m);
+    }
+  }
+  const deduped = Array.from(dedupedMap.values());
+
   // Apply filter
-  const filtered = modules.filter(m => {
+  const filtered = deduped.filter(m => {
     if (filter === 'all') return true;
     if (filter === 'saved') return savedIds.has(m.id);
     return m.status === filter;
@@ -99,9 +111,9 @@ export default function LearnerLibraryPage() {
           style={{ width: 'auto', minWidth: 200, fontSize: 14, cursor: 'pointer' }}
         >
           {STATUS_FILTERS.map(f => {
-            const count = f.key === 'all' ? modules.length
+            const count = f.key === 'all' ? deduped.length
               : f.key === 'saved' ? savedIds.size
-              : modules.filter(m => m.status === f.key).length;
+              : deduped.filter(m => m.status === f.key).length;
             return (
               <option key={f.key} value={f.key}>
                 {f.label} ({count})
