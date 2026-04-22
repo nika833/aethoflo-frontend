@@ -332,7 +332,7 @@ export default function LearnerModulePage() {
 
   // ── Step 1: Module content + checklist ─────────────────────────────────────
   return (
-    <div className="animate-fade-up" style={{ maxWidth: 1100, width: '100%' }}>
+    <div className="animate-fade-up" style={{ width: '100%' }}>
       <button className="btn btn-ghost btn-sm" onClick={() => navigate('/learner')}
         style={{ marginBottom: 24, color: 'var(--text-tertiary)', paddingLeft: 0 }}>
         ← Back to roadmap
@@ -359,7 +359,7 @@ export default function LearnerModulePage() {
       <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
         {/* Left column — title, text sections, checklist, CTA */}
-        <div style={{ flex: '1 1 340px', minWidth: 0 }}>
+        <div style={{ flex: '0 0 400px', minWidth: 0 }}>
           <div style={{ marginBottom: 28 }}>
             <h2 style={{ margin: '0 0 10px' }}>{mod.title}</h2>
             {mod.objective && (
@@ -477,7 +477,7 @@ export default function LearnerModulePage() {
         </div>
 
         {/* Right column — media + heart button */}
-        <div style={{ flex: '1 1 360px', minWidth: 0 }}>
+        <div style={{ flex: '1 1 0', minWidth: 0 }}>
           {/* Heart button pinned to top-right */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             <button
