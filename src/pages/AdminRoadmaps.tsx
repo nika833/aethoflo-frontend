@@ -242,7 +242,7 @@ function ModuleChip({ mod, repeatCount, onRemove, onDragStart, onEdit }: {
   return (
     <div
       draggable onDragStart={onDragStart}
-      title="Drag to move · Click title to edit"
+      title="Drag to move"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -266,10 +266,7 @@ function ModuleChip({ mod, repeatCount, onRemove, onDragStart, onEdit }: {
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <span
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          style={{ lineHeight: 1.35, cursor: 'pointer', display: 'block' }}
-        >{mod.title}</span>
+        <span style={{ lineHeight: 1.35, display: 'block' }}>{mod.title}</span>
         {ruleBadge && (
           <span style={{ fontSize: 10, color: 'var(--accent-dark)', fontWeight: 500 }}>{ruleBadge}</span>
         )}
@@ -280,6 +277,18 @@ function ModuleChip({ mod, repeatCount, onRemove, onDragStart, onEdit }: {
           borderRadius: 10, padding: '1px 5px', flexShrink: 0,
         }}>{repeatCount}×</span>
       )}
+      {/* Gear icon — hover-only escape hatch for manual rule override */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        title="Edit release rule"
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          padding: '0 2px', lineHeight: 1, fontSize: 12,
+          color: 'var(--text-tertiary)', opacity: hovered ? 0.7 : 0,
+          transition: 'opacity 120ms',
+          flexShrink: 0,
+        }}
+      >⚙</button>
       <button
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
         title="Remove from roadmap"
@@ -425,12 +434,17 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
   };
 
   const moveModule = async (rmId: string, toWeek: number) => {
-    // Domain is fixed on the module — only week changes on drag
+    const newRule = toWeek <= 1 ? 'immediate' : 'days_offset';
+    const newDays = toWeek <= 1 ? null : (toWeek - 1) * 7;
     setGridModules((prev) => prev.map((m) =>
-      m.id === rmId ? { ...m, week_number: toWeek } : m
+      m.id === rmId ? { ...m, week_number: toWeek, release_rule: newRule, release_days: newDays } : m
     ));
     setDragSource(null); setDragTarget(null); setLibraryDrag(null);
-    try { await roadmapsApi.updateModule(roadmap.id, rmId, { week_number: toWeek }); }
+    try {
+      await roadmapsApi.updateModule(roadmap.id, rmId, {
+        week_number: toWeek, release_rule: newRule, release_days: newDays,
+      });
+    }
     catch { setError('Could not move module.'); }
   };
 
@@ -483,7 +497,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
           {applyingSchedule ? <Spinner size={12} /> : '⟳ Apply week schedule'}
         </button>
         <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-          Click any cell to add · Drag to move · Click title to edit · × to remove
+          Click any cell to add · Drag to move · × to remove
         </span>
       </div>
 
