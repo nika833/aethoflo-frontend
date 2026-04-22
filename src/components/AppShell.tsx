@@ -17,7 +17,6 @@ const LEARNER_NAV = [
   { to: '/learner',          label: 'My Roadmap',  icon: '◈' },
   { to: '/learner/progress', label: 'Progress',    icon: '◉' },
   { to: '/learner/library',  label: 'Library',     icon: '⊟' },
-  { to: '/learner/saved',    label: 'Saved',       icon: '♥' },
 ];
 
 const SIDEBAR_BG = '#5C3520';

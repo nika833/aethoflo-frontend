@@ -90,33 +90,25 @@ export default function LearnerLibraryPage() {
         </p>
       </div>
 
-      {/* Filter pills */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 28 }}>
-        {STATUS_FILTERS.map(f => {
-          const count = f.key === 'all' ? modules.length
-            : f.key === 'saved' ? savedIds.size
-            : modules.filter(m => m.status === f.key).length;
-          const active = filter === f.key;
-          return (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              style={{
-                padding: '6px 14px', borderRadius: 100, fontSize: 13, fontWeight: 500,
-                border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-                background: active ? 'var(--accent)' : 'var(--surface)',
-                color: active ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer', transition: 'all 150ms',
-              }}
-            >
-              {f.label}
-              <span style={{
-                marginLeft: 6, fontSize: 11, fontWeight: 600,
-                color: active ? 'rgba(255,255,255,0.75)' : 'var(--text-tertiary)',
-              }}>{count}</span>
-            </button>
-          );
-        })}
+      {/* Filter dropdown */}
+      <div style={{ marginBottom: 28 }}>
+        <select
+          value={filter}
+          onChange={e => setFilter(e.target.value as FilterKey)}
+          className="form-input"
+          style={{ width: 'auto', minWidth: 200, fontSize: 14, cursor: 'pointer' }}
+        >
+          {STATUS_FILTERS.map(f => {
+            const count = f.key === 'all' ? modules.length
+              : f.key === 'saved' ? savedIds.size
+              : modules.filter(m => m.status === f.key).length;
+            return (
+              <option key={f.key} value={f.key}>
+                {f.label} ({count})
+              </option>
+            );
+          })}
+        </select>
       </div>
 
       {filtered.length === 0 && (
