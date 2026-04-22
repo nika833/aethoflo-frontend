@@ -16,13 +16,6 @@ interface ModuleWithStatus {
   started_at: string | null;
 }
 
-interface SavedModule {
-  id: string;
-  title: string;
-  objective: string | null;
-  domain_name: string | null;
-  saved_at: string;
-}
 
 interface LearnerHomeData {
   assignment: {
@@ -355,7 +348,7 @@ export default function LearnerHomePage() {
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const [unlocking, setUnlocking] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [savedModules, setSavedModules] = useState<SavedModule[]>([]);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 700);
   const navigate = useNavigate();
   const moduleRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -367,8 +360,10 @@ export default function LearnerHomePage() {
     fetchData();
     learnerProgressApi.getSaved().then(items => {
       setSavedIds(new Set(items.map(i => i.id)));
-      setSavedModules(items);
     }).catch(() => {});
+    const onResize = () => setIsMobile(window.innerWidth < 700);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, [fetchData]);
 
   const dismissWelcome = () => {
@@ -382,17 +377,6 @@ export default function LearnerHomePage() {
       if (newSaved) next.add(moduleId); else next.delete(moduleId);
       return next;
     });
-    if (!newSaved) {
-      setSavedModules(prev => prev.filter(m => m.id !== moduleId));
-    } else {
-      const mod = data?.modules.find(m => m.id === moduleId);
-      if (mod) {
-        setSavedModules(prev => [{
-          id: mod.id, title: mod.title, objective: mod.objective,
-          domain_name: mod.domain_name, saved_at: new Date().toISOString(),
-        }, ...prev]);
-      }
-    }
   };
 
   const handleUnlockEarlyAccess = async () => {
@@ -437,19 +421,57 @@ export default function LearnerHomePage() {
   return (
     <div className="animate-fade-up" style={{ maxWidth: 1100 }}>
 
+      {/* Welcome card inline on mobile */}
+      {showWelcome && isMobile && (
+        <div style={{
+          marginBottom: 24,
+          background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 16,
+          padding: '20px 22px', position: 'relative',
+        }}>
+          <button onClick={dismissWelcome} style={{
+            position: 'absolute', top: 12, right: 14,
+            background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', fontSize: 20, lineHeight: 1, padding: 0,
+          }}>×</button>
+          <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 8 }}>
+            Welcome — here's how this works
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              { icon: '⊟', text: "Each module has a short resource plus a quick check-in at the end." },
+              { icon: '◉', text: "New modules release automatically — you'll get notified by email or text when they drop." },
+              { icon: '◈', text: "Your login link works automatically — bookmark it for quick access." },
+            ].map(({ icon, text }) => (
+              <div key={icon} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1, color: '#7C3AED' }}>{icon}</span>
+                <span style={{ fontSize: 12, color: '#3730A3', lineHeight: 1.5 }}>{text}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={dismissWelcome} style={{
+            marginTop: 16, width: '100%', padding: '9px 16px',
+            background: '#7C3AED', color: 'white', border: 'none',
+            borderRadius: 100, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+          }}>
+            Got it — let's go →
+          </button>
+        </div>
+      )}
+
       {/* Two-column layout — flex-wrap so calendar stacks on top on mobile */}
       <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', flexWrap: 'wrap' }}>
 
-        {/* RIGHT column first in DOM so it appears on top when wrapped on mobile */}
-        <div style={{ width: 300, flexShrink: 0, order: 2 }}>
-          <div style={{ position: 'sticky', top: 24 }}>
-            <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)',
-              letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
-              Release Schedule
-            </p>
-            <MiniCalendar modules={modules} onModuleClick={handleCalendarModuleClick} />
+        {/* Calendar — desktop only */}
+        {!isMobile && (
+          <div style={{ width: 300, flexShrink: 0, order: 2 }}>
+            <div style={{ position: 'sticky', top: 24 }}>
+              <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)',
+                letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
+                Release Schedule
+              </p>
+              <MiniCalendar modules={modules} onModuleClick={handleCalendarModuleClick} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* LEFT: Roadmap */}
         <div style={{ flex: 1, minWidth: 300, order: 1 }}>
@@ -647,34 +669,11 @@ export default function LearnerHomePage() {
             </div>
           </div>
 
-          {/* Saved section */}
-          {savedModules.length > 0 && (
-            <div style={{ marginTop: 40 }}>
-              <h4 style={{ marginBottom: 14, fontSize: 13, color: 'var(--text-secondary)',
-                fontFamily: 'var(--font-body)', fontWeight: 500, letterSpacing: '0.06em',
-                textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: '#E11D48' }}>♥</span> Saved
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {savedModules.map(m => (
-                  <div key={m.id} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {m.domain_name && (
-                        <div style={{ fontSize: 11, color: 'var(--accent-dark)', fontWeight: 500, marginBottom: 2 }}>{m.domain_name}</div>
-                      )}
-                      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{m.title}</div>
-                    </div>
-                    <SaveButton moduleId={m.id} saved={true} onToggle={handleToggleSave} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Welcome card — floating bottom-right */}
-      {showWelcome && (
+      {/* Welcome card — fixed bottom-right on desktop only */}
+      {showWelcome && !isMobile && (
         <div style={{
           position: 'fixed', bottom: 24, right: 24, width: 300,
           background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 16,
