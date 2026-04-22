@@ -91,10 +91,17 @@ export default function LearnerModulePage() {
   const [peerSignal, setPeerSignal] = useState<{ count: number; samples: string[] } | null>(null);
   const [saved, setSaved] = useState(false);
   const [savingToggle, setSavingToggle] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 700);
 
   // Random per-provider, stable for this session
   const [promptIdx] = useState(() => Math.floor(Math.random() * 3));
   const currentPrompt = PEER_PROMPTS[promptIdx];
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 700);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     if (!roadmapModuleId) return;
@@ -331,8 +338,121 @@ export default function LearnerModulePage() {
   }
 
   // ── Step 1: Module content + checklist ─────────────────────────────────────
+
+  const saveButton = (
+    <button
+      onClick={async () => {
+        if (savingToggle || !roadmapModuleId) return;
+        setSavingToggle(true);
+        try {
+          const res = await learnerProgressApi.toggleSave(roadmapModuleId);
+          setSaved(res.saved);
+        } finally { setSavingToggle(false); }
+      }}
+      title={saved ? 'Remove from saved' : 'Save this module'}
+      style={{
+        background: 'none', border: 'none', cursor: savingToggle ? 'default' : 'pointer',
+        fontSize: 24, lineHeight: 1, padding: '4px 6px',
+        color: saved ? '#E11D48' : 'var(--text-tertiary)',
+        opacity: savingToggle ? 0.5 : 1, transition: 'color 150ms',
+      }}
+    >{saved ? '♥' : '♡'}</button>
+  );
+
+  const mediaBlock = mod.media.length > 0 ? (
+    <section style={{ marginBottom: 20 }}>
+      <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
+        letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
+        Resources
+      </h4>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {mod.media.map((item) => <MediaBlock key={item.id} item={item} />)}
+      </div>
+    </section>
+  ) : null;
+
+  const checklistBlock = mod.checklist ? (
+    <section style={{ marginBottom: 28 }}>
+      <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
+        letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
+        {mod.checklist.title}
+      </h4>
+      <div className="card card-padded" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {mod.checklist.items.map((item) => (
+          <div key={item.id}>
+            {item.item_type === 'checkbox' && (
+              <label style={{ display: 'flex', gap: 12, cursor: 'pointer', alignItems: 'flex-start' }}>
+                <input type="checkbox"
+                  checked={responses[item.id]?.bool ?? false}
+                  onChange={(e) => handleCheckbox(item.id, e.target.checked)}
+                  style={{ marginTop: 2, accentColor: 'var(--accent)', width: 16, height: 16 }} />
+                <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                  {item.label}
+                  {item.is_required && <span style={{ color: 'var(--accent)', marginLeft: 2 }}>*</span>}
+                </span>
+              </label>
+            )}
+            {item.item_type === 'text' && (
+              <div className="form-group">
+                <label className="form-label">
+                  {item.label}{item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
+                </label>
+                {item.helper_text && <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: -2 }}>{item.helper_text}</p>}
+                <textarea className="form-textarea" value={responses[item.id]?.text ?? ''}
+                  onChange={(e) => handleText(item.id, e.target.value)} rows={3} />
+              </div>
+            )}
+            {item.item_type === 'number' && (
+              <div className="form-group">
+                <label className="form-label">
+                  {item.label}{item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
+                </label>
+                <input type="number" className="form-input"
+                  value={responses[item.id]?.number ?? ''}
+                  onChange={(e) => handleNumber(item.id, parseFloat(e.target.value))}
+                  style={{ maxWidth: 160 }} />
+              </div>
+            )}
+            {item.item_type === 'rating' && (
+              <div className="form-group">
+                <label className="form-label">
+                  {item.label}{item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[1,2,3,4,5].map((n) => (
+                    <button key={n} type="button" className="btn btn-secondary btn-sm"
+                      onClick={() => handleNumber(item.id, n)}
+                      style={{
+                        background: responses[item.id]?.number === n ? 'var(--accent)' : undefined,
+                        color: responses[item.id]?.number === n ? 'white' : undefined,
+                        borderColor: responses[item.id]?.number === n ? 'var(--accent)' : undefined,
+                      }}>{n}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  ) : null;
+
+  const ctaBlock = (
+    <>
+      <button className="btn btn-primary btn-lg" onClick={() => setPhase('feedback')}
+        disabled={!canAdvance()} style={{ width: '100%' }}>
+        Next: share your take →
+      </button>
+      {!canAdvance() && (
+        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
+          Complete all required checklist items to continue
+        </p>
+      )}
+    </>
+  );
+
   return (
-    <div className="animate-fade-up" style={{ width: '100%' }}>
+    <div className="animate-fade-up" style={{ width: '100%', boxSizing: 'border-box' }}>
       <button className="btn btn-ghost btn-sm" onClick={() => navigate('/learner')}
         style={{ marginBottom: 24, color: 'var(--text-tertiary)', paddingLeft: 0 }}>
         ← Back to roadmap
@@ -355,30 +475,35 @@ export default function LearnerModulePage() {
         </div>
       </div>
 
-      {/* Two-column layout: details left, media right */}
-      <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-
-        {/* Left column — title, text sections, checklist, CTA */}
-        <div style={{ flex: '0 0 400px', minWidth: 0 }}>
-          <div style={{ marginBottom: 28 }}>
-            <h2 style={{ margin: '0 0 10px' }}>{mod.title}</h2>
-            {mod.objective && (
-              <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>
-                {mod.objective}
-              </p>
-            )}
+      {isMobile ? (
+        /* ── Mobile: single column, video between why-it-matters and note ── */
+        <div>
+          {/* Title + heart */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 16 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: '0 0 8px' }}>{mod.title}</h2>
+              {mod.objective && (
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+                  {mod.objective}
+                </p>
+              )}
+            </div>
+            <div style={{ flexShrink: 0 }}>{saveButton}</div>
           </div>
 
           {mod.why_it_matters && (
-            <section className="card card-padded" style={{ marginBottom: 20 }}>
+            <section className="card card-padded" style={{ marginBottom: 16 }}>
               <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Why it matters</h4>
               <p style={{ fontSize: 14 }}>{mod.why_it_matters}</p>
             </section>
           )}
 
+          {/* Video between why-it-matters and note */}
+          {mediaBlock}
+
           {mod.context_note && (
             <section style={{
-              marginBottom: 20, background: 'var(--accent-light)',
+              marginBottom: 16, background: 'var(--accent-light)',
               border: '1px solid var(--accent-mid)', borderRadius: 'var(--radius-md)', padding: '14px 16px',
             }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent-dark)',
@@ -387,137 +512,54 @@ export default function LearnerModulePage() {
             </section>
           )}
 
-          {/* Checklist */}
-          {mod.checklist && (
-            <section style={{ marginBottom: 28 }}>
-              <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
-                letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
-                {mod.checklist.title}
-              </h4>
-              <div className="card card-padded" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {mod.checklist.items.map((item) => (
-                  <div key={item.id}>
-                    {item.item_type === 'checkbox' && (
-                      <label style={{ display: 'flex', gap: 12, cursor: 'pointer', alignItems: 'flex-start' }}>
-                        <input type="checkbox"
-                          checked={responses[item.id]?.bool ?? false}
-                          onChange={(e) => handleCheckbox(item.id, e.target.checked)}
-                          style={{ marginTop: 2, accentColor: 'var(--accent)', width: 16, height: 16 }} />
-                        <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>
-                          {item.label}
-                          {item.is_required && <span style={{ color: 'var(--accent)', marginLeft: 2 }}>*</span>}
-                        </span>
-                      </label>
-                    )}
-                    {item.item_type === 'text' && (
-                      <div className="form-group">
-                        <label className="form-label">
-                          {item.label}
-                          {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
-                        </label>
-                        {item.helper_text && (
-                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: -2 }}>{item.helper_text}</p>
-                        )}
-                        <textarea className="form-textarea"
-                          value={responses[item.id]?.text ?? ''}
-                          onChange={(e) => handleText(item.id, e.target.value)}
-                          rows={3} />
-                      </div>
-                    )}
-                    {item.item_type === 'number' && (
-                      <div className="form-group">
-                        <label className="form-label">
-                          {item.label}
-                          {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
-                        </label>
-                        <input type="number" className="form-input"
-                          value={responses[item.id]?.number ?? ''}
-                          onChange={(e) => handleNumber(item.id, parseFloat(e.target.value))}
-                          style={{ maxWidth: 160 }} />
-                      </div>
-                    )}
-                    {item.item_type === 'rating' && (
-                      <div className="form-group">
-                        <label className="form-label">
-                          {item.label}
-                          {item.is_required && <span style={{ color: 'var(--accent)' }}> *</span>}
-                        </label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          {[1,2,3,4,5].map((n) => (
-                            <button key={n} type="button" className="btn btn-secondary btn-sm"
-                              onClick={() => handleNumber(item.id, n)}
-                              style={{
-                                background: responses[item.id]?.number === n ? 'var(--accent)' : undefined,
-                                color: responses[item.id]?.number === n ? 'white' : undefined,
-                                borderColor: responses[item.id]?.number === n ? 'var(--accent)' : undefined,
-                              }}>{n}</button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          <button
-            className="btn btn-primary btn-lg"
-            onClick={() => setPhase('feedback')}
-            disabled={!canAdvance()}
-            style={{ width: '100%' }}
-          >
-            Next: share your take →
-          </button>
-          {!canAdvance() && (
-            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
-              Complete all required checklist items to continue
-            </p>
-          )}
+          {checklistBlock}
+          {ctaBlock}
         </div>
+      ) : (
+        /* ── Desktop: two-column side by side ── */
+        <div style={{ display: 'flex', gap: 48, alignItems: 'flex-start' }}>
+          {/* Left column */}
+          <div style={{ flex: '0 0 400px', minWidth: 0 }}>
+            <div style={{ marginBottom: 28 }}>
+              <h2 style={{ margin: '0 0 10px' }}>{mod.title}</h2>
+              {mod.objective && (
+                <p style={{ fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>
+                  {mod.objective}
+                </p>
+              )}
+            </div>
 
-        {/* Right column — media + heart button */}
-        <div style={{ flex: '1 1 0', minWidth: 0 }}>
-          {/* Heart button pinned to top-right */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-            <button
-              onClick={async () => {
-                if (savingToggle || !roadmapModuleId) return;
-                setSavingToggle(true);
-                try {
-                  const res = await learnerProgressApi.toggleSave(roadmapModuleId);
-                  setSaved(res.saved);
-                } finally {
-                  setSavingToggle(false);
-                }
-              }}
-              title={saved ? 'Remove from saved' : 'Save this module'}
-              style={{
-                background: 'none', border: 'none', cursor: savingToggle ? 'default' : 'pointer',
-                fontSize: 24, lineHeight: 1, padding: '4px 6px',
-                color: saved ? '#E11D48' : 'var(--text-tertiary)',
-                opacity: savingToggle ? 0.5 : 1,
-                transition: 'color 150ms',
-              }}
-            >
-              {saved ? '♥' : '♡'}
-            </button>
+            {mod.why_it_matters && (
+              <section className="card card-padded" style={{ marginBottom: 20 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>Why it matters</h4>
+                <p style={{ fontSize: 14 }}>{mod.why_it_matters}</p>
+              </section>
+            )}
+
+            {mod.context_note && (
+              <section style={{
+                marginBottom: 20, background: 'var(--accent-light)',
+                border: '1px solid var(--accent-mid)', borderRadius: 'var(--radius-md)', padding: '14px 16px',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent-dark)',
+                  letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>A note for you</div>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>{mod.context_note}</p>
+              </section>
+            )}
+
+            {checklistBlock}
+            {ctaBlock}
           </div>
 
-          {mod.media.length > 0 && (
-            <section>
-              <h4 style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500,
-                letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>
-                Resources
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {mod.media.map((item) => <MediaBlock key={item.id} item={item} />)}
-              </div>
-            </section>
-          )}
+          {/* Right column — media + heart */}
+          <div style={{ flex: '1 1 0', minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              {saveButton}
+            </div>
+            {mediaBlock}
+          </div>
         </div>
-
-      </div>
+      )}
     </div>
   );
 }

@@ -32,6 +32,7 @@ interface LearnerHomeData {
 }
 
 const WELCOME_KEY = 'aethoflo_learner_welcomed';
+const CALENDAR_ANIMATED_KEY = 'aethoflo_calendar_animated';
 const MONTH_NAMES = ['January','February','March','April','May','June',
   'July','August','September','October','November','December'];
 const DAY_NAMES = ['Su','Mo','Tu','We','Th','Fr','Sa'];
@@ -349,6 +350,7 @@ export default function LearnerHomePage() {
   const [unlocking, setUnlocking] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 700);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const navigate = useNavigate();
   const moduleRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -365,6 +367,27 @@ export default function LearnerHomePage() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [fetchData]);
+
+  // Mobile calendar: animate open once per session, then collapse → scroll to active module
+  useEffect(() => {
+    if (!isMobile || !data?.modules.length) return;
+    const alreadyRan = sessionStorage.getItem(CALENDAR_ANIMATED_KEY);
+    if (alreadyRan) return;
+
+    const t1 = setTimeout(() => setCalendarOpen(true), 300);
+    const t2 = setTimeout(() => {
+      setCalendarOpen(false);
+      sessionStorage.setItem(CALENDAR_ANIMATED_KEY, '1');
+    }, 3800);
+    const t3 = setTimeout(() => {
+      const activeId = data.current_module?.id ?? data.modules.find(m => m.status !== 'locked')?.id;
+      if (activeId && moduleRefs.current[activeId]) {
+        moduleRefs.current[activeId]!.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 4600);
+
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [isMobile, data]);
 
   const dismissWelcome = () => {
     localStorage.setItem(WELCOME_KEY, 'true');
@@ -497,6 +520,41 @@ export default function LearnerHomePage() {
               </div>
             </div>
           </div>
+
+          {/* Mobile calendar strip — tap to expand, auto-animates on first session */}
+          {isMobile && (
+            <div style={{ marginBottom: 20 }}>
+              <button
+                onClick={() => setCalendarOpen(o => !o)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  borderRadius: calendarOpen ? 'var(--radius-lg) var(--radius-lg) 0 0' : 'var(--radius-lg)',
+                  padding: '10px 16px', cursor: 'pointer', transition: 'border-radius 200ms',
+                }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)',
+                  letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Release Schedule
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)',
+                  transform: calendarOpen ? 'rotate(180deg)' : 'none', transition: 'transform 300ms', display: 'inline-block' }}>
+                  ▾
+                </span>
+              </button>
+              <div style={{
+                maxHeight: calendarOpen ? 520 : 0,
+                overflow: 'hidden',
+                transition: 'max-height 600ms cubic-bezier(0.4, 0, 0.2, 1)',
+                borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
+                border: calendarOpen ? '1px solid var(--border)' : 'none',
+                borderTop: 'none',
+              }}>
+                <div style={{ padding: '4px 0 0' }}>
+                  <MiniCalendar modules={modules} onModuleClick={handleCalendarModuleClick} />
+                </div>
+              </div>
+            </div>
+          )}
 
           <h4 style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)', fontWeight: 500, letterSpacing: '0.06em',

@@ -232,20 +232,19 @@ export default function AppShell() {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar */}
+    <div style={{ minHeight: '100vh' }}>
+      {/* Sidebar — fixed overlay, never pushes content */}
       <aside
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
+          position: 'fixed', top: 0, left: 0, height: '100vh', zIndex: 200,
           width: expanded ? 220 : 60,
           background: SIDEBAR_BG,
           borderRight: `1px solid ${BORDER_COLOR}`,
           display: 'flex', flexDirection: 'column',
-          flexShrink: 0,
           transition: 'width 200ms cubic-bezier(0.4,0,0.2,1)',
           overflow: 'hidden',
-          position: 'sticky', top: 0, height: '100vh',
         }}>
 
         {/* Logo */}
@@ -335,8 +334,8 @@ export default function AppShell() {
         </div>
       </aside>
 
-      {/* Main content */}
-      <main style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
+      {/* Main content — offset by collapsed sidebar width, never shifted by hover */}
+      <main style={{ marginLeft: 60, minHeight: '100vh', overflow: 'auto' }}>
         <div style={{ padding: '36px 28px' }}>
           <Outlet />
         </div>
