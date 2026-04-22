@@ -101,6 +101,10 @@ export default function LearnerModulePage() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 700);
   const [draftSaved, setDraftSaved] = useState(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const responsesRef = useRef(responses);
+  const modRef = useRef(mod);
+  useEffect(() => { responsesRef.current = responses; }, [responses]);
+  useEffect(() => { modRef.current = mod; }, [mod]);
 
   // Random per-provider, stable for this session
   const [promptIdx] = useState(() => Math.floor(Math.random() * 3));
@@ -159,11 +163,30 @@ export default function LearnerModulePage() {
         await learnerProgressApi.saveChecklist(roadmapModuleId, mod.checklist!.id, items);
         localStorage.removeItem(`aethoflo_draft_${roadmapModuleId}`);
         setDraftSaved(true);
-        setTimeout(() => setDraftSaved(false), 2000);
+        setTimeout(() => setDraftSaved(false), 3000);
       } catch {}
     }, 1000);
     return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
   }, [responses, roadmapModuleId, mod]);
+
+  // Flush pending autosave when navigating away before the 1s debounce fires
+  useEffect(() => {
+    return () => {
+      if (!draftTimer.current) return;
+      clearTimeout(draftTimer.current);
+      const currentMod = modRef.current;
+      const currentResponses = responsesRef.current;
+      if (!roadmapModuleId || !currentMod?.checklist || Object.keys(currentResponses).length === 0) return;
+      const items = currentMod.checklist.items.map(item => ({
+        template_item_id: item.id,
+        value_bool:   currentResponses[item.id]?.bool   ?? null,
+        value_text:   currentResponses[item.id]?.text   ?? null,
+        value_number: currentResponses[item.id]?.number ?? null,
+      }));
+      learnerProgressApi.saveChecklist(roadmapModuleId, currentMod.checklist.id, items).catch(() => {});
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCheckbox = (itemId: string, checked: boolean) =>
     setResponses((r) => ({ ...r, [itemId]: { bool: checked } }));

@@ -83,7 +83,7 @@ export default function MediaBlock({ item }: { item: MediaItem }) {
     return (
       <div>
         {item.title && <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, color: 'var(--text-primary)' }}>{item.title}</div>}
-        <iframe src={url} style={{ width: '100%', height: 520, border: '1px solid var(--border)', borderRadius: 10 }} />
+        <iframe src={url} style={{ width: '100%', height: 900, border: '1px solid var(--border)', borderRadius: 10 }} />
         <a href={url} target="_blank" rel="noreferrer"
           style={{ display: 'inline-block', marginTop: 6, fontSize: 12, color: 'var(--text-tertiary)' }}>
           Open PDF in new tab ↗
