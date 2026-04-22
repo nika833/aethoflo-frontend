@@ -109,7 +109,7 @@ export default function LearnerModulePage() {
       .then((data) => {
         setMod(data);
         setSaved(data.is_saved ?? false);
-        if (data.status === 'completed') setSubmitted(true);
+        if (data.status === 'completed') { setSubmitted(true); setPhase('peer'); }
       })
       .catch((err: any) => {
         const status = err?.response?.status;
