@@ -61,14 +61,14 @@ export default function LearnerProgressPage() {
       </div>
 
       {/* Summary row */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 32 }}>
         {[
           { label: 'Completed', value: modules.filter(m => m.status === 'completed').length, color: 'var(--status-completed)' },
           { label: 'Available', value: modules.filter(m => m.status === 'available' || m.status === 'in_progress').length, color: 'var(--accent)' },
           { label: 'Upcoming', value: modules.filter(m => m.status === 'locked').length, color: 'var(--text-tertiary)' },
         ].map((s) => (
-          <div key={s.label} className="card card-padded" style={{ flex: 1, textAlign: 'center' }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: s.color, lineHeight: 1 }}>{s.value}</div>
+          <div key={s.label} className="card" style={{ padding: '14px 8px', textAlign: 'center', minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', color: s.color, lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{s.label}</div>
           </div>
         ))}
