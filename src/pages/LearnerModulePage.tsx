@@ -653,8 +653,8 @@ export default function LearnerModulePage() {
             {ctaBlock}
           </div>
 
-          {/* Right column — media + heart */}
-          <div style={{ flex: '1 1 0', minWidth: 0 }}>
+          {/* Right column — sticky media + heart */}
+          <div style={{ flex: '1 1 0', minWidth: 0, position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
               {saveButton}
             </div>
