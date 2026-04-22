@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { learnerProgressApi } from '../lib/api';
 import { Spinner, EmptyState } from '../components/ui';
@@ -13,6 +13,7 @@ interface ModuleWithStatus {
   display_order: number;
   release_date_calculated: string | null;
   completed_at: string | null;
+  started_at: string | null;
 }
 
 interface SavedModule {
@@ -38,15 +39,71 @@ interface LearnerHomeData {
 }
 
 const WELCOME_KEY = 'aethoflo_learner_welcomed';
-
 const MONTH_NAMES = ['January','February','March','April','May','June',
   'July','August','September','October','November','December'];
 const DAY_NAMES = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
-function MiniCalendar({ modules }: { modules: ModuleWithStatus[] }) {
+// ── Streak helpers ─────────────────────────────────────────────────────────────
+function getWeekStart(dateStr: string): string {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff).toISOString().split('T')[0];
+}
+
+function computeStreak(modules: ModuleWithStatus[]): { streak: number; completedWeeks: Set<string> } {
+  const completed = modules.filter(m => m.completed_at);
+  const completedWeeks = new Set(completed.map(m => getWeekStart(m.completed_at!)));
+  const now = new Date();
+  let streak = 0;
+  for (let i = 0; i < 52; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i * 7);
+    const wk = getWeekStart(d.toISOString());
+    if (completedWeeks.has(wk)) {
+      streak++;
+    } else if (i === 0) {
+      continue; // current week not done yet — check previous
+    } else {
+      break;
+    }
+  }
+  return { streak, completedWeeks };
+}
+
+// ── Release date color rules ────────────────────────────────────────────────────
+function getReleaseMeta(mod: ModuleWithStatus): { label: string; color: string; badge?: string } | null {
+  if (!mod.release_date_calculated) return null;
+  const releaseDate = new Date(mod.release_date_calculated + 'T00:00:00');
+  const now = new Date();
+  const label = releaseDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  if (mod.status === 'completed') {
+    const early = mod.completed_at && new Date(mod.completed_at) < releaseDate;
+    return { label, color: 'var(--status-completed)', badge: early ? 'Early' : undefined };
+  }
+  if (mod.status === 'locked') {
+    return { label, color: 'var(--text-tertiary)' };
+  }
+  // available or in_progress
+  if (releaseDate < now) {
+    return { label, color: '#DC2626' }; // red = late
+  }
+  return { label, color: 'var(--accent)' }; // on track
+}
+
+// ── Mini Calendar ──────────────────────────────────────────────────────────────
+interface MiniCalendarProps {
+  modules: ModuleWithStatus[];
+  onModuleClick: (moduleId: string) => void;
+}
+
+function MiniCalendar({ modules, onModuleClick }: MiniCalendarProps) {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
+  // Build release date map
   const releaseDates: Record<string, ModuleWithStatus[]> = {};
   for (const m of modules) {
     if (m.release_date_calculated) {
@@ -56,8 +113,27 @@ function MiniCalendar({ modules }: { modules: ModuleWithStatus[] }) {
     }
   }
 
-  const futureDates = Object.keys(releaseDates).filter(d => d >= todayStr).sort();
+  // Build completion date map (for green circles)
+  const completionDates: Record<string, ModuleWithStatus[]> = {};
+  for (const m of modules) {
+    if (m.completed_at) {
+      const d = m.completed_at.split('T')[0];
+      completionDates[d] = completionDates[d] || [];
+      completionDates[d].push(m);
+    }
+  }
 
+  // Streak computation
+  const { streak, completedWeeks } = computeStreak(modules);
+  const currentWeekStr = getWeekStart(now.toISOString());
+  const last8Weeks = Array.from({ length: 8 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(now.getDate() - (7 - i) * 7);
+    const wk = getWeekStart(d.toISOString());
+    return { wk, active: completedWeeks.has(wk), isCurrent: wk === currentWeekStr };
+  });
+
+  const futureDates = Object.keys(releaseDates).filter(d => d >= todayStr).sort();
   const initDate = futureDates.length > 0 ? new Date(futureDates[0] + 'T12:00:00') : now;
   const [viewMonth, setViewMonth] = useState(new Date(initDate.getFullYear(), initDate.getMonth(), 1));
 
@@ -71,193 +147,178 @@ function MiniCalendar({ modules }: { modules: ModuleWithStatus[] }) {
     return dt.getFullYear() === year && dt.getMonth() === month;
   });
 
-  // Next release countdown
-  const nextDate = futureDates[0] ? new Date(futureDates[0] + 'T12:00:00') : null;
-  const daysUntil = nextDate
-    ? Math.ceil((nextDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-    : null;
+  const hoveredMods = hoveredDate ? (releaseDates[hoveredDate] || []) : [];
 
   return (
-    <div>
-      {/* Next release chip */}
-      {nextDate && daysUntil !== null && daysUntil >= 0 && (
+    <div style={{
+      background: '#FFFFFF',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-lg)',
+      padding: '18px 16px',
+    }}>
+      {/* Month nav */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <button onClick={() => setViewMonth(new Date(year, month - 1, 1))}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>‹</button>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+          {MONTH_NAMES[month]} {year}
+        </span>
+        <button onClick={() => setViewMonth(new Date(year, month + 1, 1))}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>›</button>
+      </div>
+
+      {/* Day headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 }}>
+        {DAY_NAMES.map(d => (
+          <div key={d} style={{ textAlign: 'center', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600, paddingBottom: 6 }}>{d}</div>
+        ))}
+      </div>
+
+      {/* Days grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const relMods = releaseDates[dateStr] || [];
+          const compMods = completionDates[dateStr] || [];
+          const isToday = dateStr === todayStr;
+          const hasRelease = relMods.length > 0;
+          const hasCompletion = compMods.length > 0;
+          const isHovered = dateStr === hoveredDate;
+          const isClickable = hasRelease;
+
+          // Circle style: green if completed on this date, today accent, release highlight, or plain
+          const circleBg = hasCompletion
+            ? 'var(--status-completed)'
+            : isToday ? 'var(--accent)'
+            : isHovered && hasRelease ? 'var(--accent-light)'
+            : hasRelease ? 'var(--accent-light)'
+            : 'transparent';
+
+          const circleColor = hasCompletion ? 'white'
+            : isToday ? 'white'
+            : hasRelease ? 'var(--accent-dark)'
+            : 'var(--text-secondary)';
+
+          return (
+            <div
+              key={day}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: 4 }}
+              onMouseEnter={() => hasRelease && setHoveredDate(dateStr)}
+              onMouseLeave={() => setHoveredDate(null)}
+            >
+              <div
+                onClick={() => {
+                  if (hasRelease) {
+                    const firstMod = relMods[0];
+                    onModuleClick(firstMod.id);
+                  }
+                }}
+                style={{
+                  width: 30, height: 30, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11,
+                  background: circleBg,
+                  color: circleColor,
+                  fontWeight: isToday || hasRelease || hasCompletion ? 600 : 400,
+                  cursor: isClickable ? 'pointer' : 'default',
+                  border: isHovered && hasRelease ? '1px solid var(--accent-mid)' : '1px solid transparent',
+                  transition: 'background 100ms',
+                  position: 'relative',
+                }}
+              >
+                {day}
+                {/* Faint checkmark overlay for completed days */}
+                {hasCompletion && (
+                  <span style={{
+                    position: 'absolute', fontSize: 8, color: 'rgba(255,255,255,0.55)',
+                    fontWeight: 900, pointerEvents: 'none',
+                  }}>✓</span>
+                )}
+              </div>
+              {/* Orange dot below for release dates (not completed) */}
+              {hasRelease && !hasCompletion && (
+                <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', marginTop: 1 }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hover tooltip */}
+      {hoveredMods.length > 0 && (
         <div style={{
-          background: '#F5F3FF',
-          border: '1px solid #DDD6FE',
-          borderRadius: 10,
-          padding: '12px 16px',
-          marginBottom: 14,
+          marginTop: 10,
+          padding: '8px 12px',
+          background: 'var(--text-primary)',
+          borderRadius: 8,
+          fontSize: 11,
+          color: 'white',
+          lineHeight: 1.4,
         }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7C3AED', marginBottom: 4 }}>
-            Next release
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#4C1D95' }}>
-            {daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`}
-          </div>
-          <div style={{ fontSize: 11, color: '#6D28D9', marginTop: 2 }}>
-            {nextDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} — {(releaseDates[futureDates[0]] || [])[0]?.title}
-          </div>
-        </div>
-      )}
-
-      {/* Calendar card */}
-      <div style={{
-        background: '#FFFFFF',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '18px 16px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <button
-            onClick={() => setViewMonth(new Date(year, month - 1, 1))}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}
-          >‹</button>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-            {MONTH_NAMES[month]} {year}
-          </span>
-          <button
-            onClick={() => setViewMonth(new Date(year, month + 1, 1))}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}
-          >›</button>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 }}>
-          {DAY_NAMES.map(d => (
-            <div key={d} style={{ textAlign: 'center', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600, paddingBottom: 6 }}>
-              {d}
+          {hoveredMods.map(m => (
+            <div key={m.id}>
+              {m.domain_name && <span style={{ opacity: 0.6, fontSize: 10 }}>{m.domain_name} · </span>}
+              {m.title}
             </div>
           ))}
         </div>
+      )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-          {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const mods = releaseDates[dateStr] || [];
-            const isToday = dateStr === todayStr;
-            const hasRelease = mods.length > 0;
-            const allCompleted = hasRelease && mods.every(m => m.status === 'completed');
-
-            return (
-              <div key={day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: 4 }}>
-                <div style={{
-                  width: 28, height: 28, borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11,
-                  background: isToday ? 'var(--accent)' : hasRelease ? 'var(--accent-light)' : 'transparent',
-                  color: isToday ? 'white' : hasRelease ? 'var(--accent-dark)' : 'var(--text-secondary)',
-                  fontWeight: isToday || hasRelease ? 600 : 400,
-                }}>
-                  {day}
-                </div>
-                {hasRelease && (
-                  <div style={{
-                    width: 4, height: 4, borderRadius: '50%',
-                    background: allCompleted ? 'var(--status-completed)' : 'var(--accent)',
-                    marginTop: 2,
-                  }} />
-                )}
+      {/* Upcoming this month */}
+      {upcomingInMonth.length > 0 && (
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 7 }}>
+            Upcoming
+          </div>
+          {upcomingInMonth.slice(0, 4).flatMap(dateStr => {
+            const date = new Date(dateStr + 'T12:00:00');
+            return (releaseDates[dateStr] || []).map(m => (
+              <div key={m.id}
+                onClick={() => onModuleClick(m.id)}
+                style={{ display: 'flex', gap: 7, marginBottom: 6, alignItems: 'flex-start', cursor: 'pointer' }}
+              >
+                <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, minWidth: 34, flexShrink: 0, paddingTop: 1 }}>
+                  {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{m.title}</span>
               </div>
-            );
+            ));
           })}
         </div>
-
-        {upcomingInMonth.length > 0 && (
-          <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
-              This month
-            </div>
-            {upcomingInMonth.slice(0, 5).flatMap(dateStr => {
-              const date = new Date(dateStr + 'T12:00:00');
-              return (releaseDates[dateStr] || []).map(m => (
-                <div key={m.id} style={{ display: 'flex', gap: 8, marginBottom: 7, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, minWidth: 36, flexShrink: 0, paddingTop: 1 }}>
-                    {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                    {m.title}
-                  </span>
-                </div>
-              ));
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Streak Widget ─────────────────────────────────────────────────────────────
-
-function getWeekStart(dateStr: string): string {
-  const d = new Date(dateStr);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff).toISOString().split('T')[0];
-}
-
-function StreakWidget({ modules }: { modules: ModuleWithStatus[] }) {
-  const completed = modules.filter(m => m.completed_at);
-  const completedWeeks = new Set(completed.map(m => getWeekStart(m.completed_at!)));
-  const now = new Date();
-  const currentWeekStr = getWeekStart(now.toISOString());
-
-  // Count consecutive weeks ending at current or last week
-  let streak = 0;
-  for (let i = 0; i < 52; i++) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i * 7);
-    const wk = getWeekStart(d.toISOString());
-    if (completedWeeks.has(wk)) {
-      streak++;
-    } else if (i === 0) {
-      // haven't done anything this week yet — check last week before breaking
-      continue;
-    } else {
-      break;
-    }
-  }
-
-  // Last 8 weeks for activity grid
-  const weeks = Array.from({ length: 8 }, (_, i) => {
-    const d = new Date(now);
-    d.setDate(now.getDate() - (7 - i) * 7);
-    const wk = getWeekStart(d.toISOString());
-    return { wk, active: completedWeeks.has(wk), isCurrent: wk === currentWeekStr };
-  });
-
-  return (
-    <div style={{ padding: '14px 2px 0' }}>
-      {/* Activity bars */}
-      <div style={{ display: 'flex', gap: 3, marginBottom: 3 }}>
-        {weeks.map((w, i) => (
-          <div key={i} title={w.wk} style={{
-            flex: 1, height: 14, borderRadius: 3,
-            background: w.active ? 'var(--accent)' : w.isCurrent ? 'var(--accent-light)' : 'var(--surface-3)',
-            border: w.isCurrent ? '1px solid var(--accent-mid)' : '1px solid transparent',
-          }} />
-        ))}
-      </div>
-      {/* Labels + streak inline */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>8 wks ago</span>
-        <span style={{ fontSize: 10, color: streak > 0 ? 'var(--accent)' : 'var(--text-tertiary)', fontWeight: streak > 0 ? 600 : 400 }}>
-          {streak > 0 ? `${streak}-week streak` : 'no streak yet'}
-        </span>
-        <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>now</span>
-      </div>
-      {/* Completed count */}
-      {completed.length > 0 && (
-        <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center' }}>
-          {completed.length} module{completed.length !== 1 ? 's' : ''} completed · {completedWeeks.size} active week{completedWeeks.size !== 1 ? 's' : ''}
-        </div>
       )}
+
+      {/* Streak — merged below calendar, no frame */}
+      <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        {/* 8-week activity circles */}
+        <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginBottom: 4 }}>
+          {last8Weeks.map((w, i) => (
+            <div key={i} title={w.wk} style={{
+              width: 22, height: 22, borderRadius: '50%',
+              background: w.active ? 'var(--status-completed)'
+                : w.isCurrent ? 'var(--accent-light)'
+                : 'var(--surface-3)',
+              border: w.isCurrent ? '1px solid var(--accent-mid)' : '1px solid transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {w.active && (
+                <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>✓</span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ textAlign: 'center', fontSize: 10, color: streak > 0 ? 'var(--accent)' : 'var(--text-tertiary)', fontWeight: streak > 0 ? 600 : 400 }}>
+          {streak > 0
+            ? `${streak}-week streak · ${modules.filter(m => m.completed_at).length} completed`
+            : 'Complete a module to start your streak'}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ♥ Save button
+// ── Save button ────────────────────────────────────────────────────────────────
 function SaveButton({ moduleId, saved, onToggle }: { moduleId: string; saved: boolean; onToggle: (id: string, newSaved: boolean) => void }) {
   const [loading, setLoading] = useState(false);
   const handle = async (e: React.MouseEvent) => {
@@ -271,18 +332,13 @@ function SaveButton({ moduleId, saved, onToggle }: { moduleId: string; saved: bo
     }
   };
   return (
-    <button
-      onClick={handle}
-      disabled={loading}
+    <button onClick={handle} disabled={loading}
       title={saved ? 'Remove from saved' : 'Save this module'}
       style={{
         background: 'none', border: 'none', cursor: loading ? 'default' : 'pointer',
         fontSize: 18, lineHeight: 1, padding: '2px 4px',
         color: saved ? '#E11D48' : 'var(--text-tertiary)',
-        opacity: loading ? 0.5 : 1,
-        transition: 'color 150ms, transform 150ms',
-        transform: 'none',
-        flexShrink: 0,
+        opacity: loading ? 0.5 : 1, transition: 'color 150ms, transform 150ms', flexShrink: 0,
       }}
       onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.2)'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
@@ -292,6 +348,7 @@ function SaveButton({ moduleId, saved, onToggle }: { moduleId: string; saved: bo
   );
 }
 
+// ── Main page ──────────────────────────────────────────────────────────────────
 export default function LearnerHomePage() {
   const [data, setData] = useState<LearnerHomeData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -300,6 +357,7 @@ export default function LearnerHomePage() {
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [savedModules, setSavedModules] = useState<SavedModule[]>([]);
   const navigate = useNavigate();
+  const moduleRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const fetchData = useCallback(() => {
     learnerProgressApi.getMy().then(setData).finally(() => setLoading(false));
@@ -329,7 +387,10 @@ export default function LearnerHomePage() {
     } else {
       const mod = data?.modules.find(m => m.id === moduleId);
       if (mod) {
-        setSavedModules(prev => [{ id: mod.id, title: mod.title, objective: mod.objective, domain_name: mod.domain_name, saved_at: new Date().toISOString() }, ...prev]);
+        setSavedModules(prev => [{
+          id: mod.id, title: mod.title, objective: mod.objective,
+          domain_name: mod.domain_name, saved_at: new Date().toISOString(),
+        }, ...prev]);
       }
     }
   };
@@ -345,37 +406,53 @@ export default function LearnerHomePage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
-        <Spinner size={32} />
-      </div>
-    );
-  }
+  const handleCalendarModuleClick = (moduleId: string) => {
+    const el = moduleRefs.current[moduleId];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Brief highlight flash
+      el.style.boxShadow = 'var(--shadow-accent)';
+      setTimeout(() => { el.style.boxShadow = ''; }, 1200);
+    }
+  };
 
-  if (!data?.assignment) {
-    return (
-      <EmptyState
-        icon="◈"
-        title="No active training"
-        description="You haven't been assigned a training roadmap yet. Check back soon."
-      />
-    );
-  }
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
+      <Spinner size={32} />
+    </div>
+  );
+
+  if (!data?.assignment) return (
+    <EmptyState icon="◈" title="No active training"
+      description="You haven't been assigned a training roadmap yet. Check back soon." />
+  );
 
   const { assignment, current_module, modules, stats } = data;
   const pct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-  const hasCalendarData = modules.some(m => m.release_date_calculated);
   const earlyReleaseEnabled = assignment.allow_early_release;
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return (
     <div className="animate-fade-up" style={{ maxWidth: 1100 }}>
 
-      {/* Two-column layout */}
-      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
+      {/* Two-column layout — flex-wrap so calendar stacks on top on mobile */}
+      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', flexWrap: 'wrap' }}>
 
-        {/* Left: Roadmap */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        {/* RIGHT column first in DOM so it appears on top when wrapped on mobile */}
+        <div style={{ width: 300, flexShrink: 0, order: 2 }}>
+          <div style={{ position: 'sticky', top: 24 }}>
+            <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)',
+              letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
+              Release Schedule
+            </p>
+            <MiniCalendar modules={modules} onModuleClick={handleCalendarModuleClick} />
+          </div>
+        </div>
+
+        {/* LEFT: Roadmap */}
+        <div style={{ flex: 1, minWidth: 300, order: 1 }}>
 
           {/* Roadmap header */}
           <div style={{ marginBottom: 28 }}>
@@ -399,7 +476,6 @@ export default function LearnerHomePage() {
             </div>
           </div>
 
-          {/* Section label */}
           <h4 style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)',
             fontFamily: 'var(--font-body)', fontWeight: 500, letterSpacing: '0.06em',
             textTransform: 'uppercase' }}>
@@ -409,9 +485,7 @@ export default function LearnerHomePage() {
           {/* Vertical timeline */}
           <div style={{ position: 'relative' }}>
             <div style={{
-              position: 'absolute',
-              left: 9, top: 20, bottom: 20,
-              width: 2,
+              position: 'absolute', left: 9, top: 20, bottom: 20, width: 2,
               background: 'linear-gradient(to bottom, var(--accent) 0%, var(--border) 100%)',
               borderRadius: 1,
             }} />
@@ -423,18 +497,19 @@ export default function LearnerHomePage() {
                 const isCompleted = mod.status === 'completed';
                 const isClickable = !isLocked;
                 const isSaved = savedIds.has(mod.id);
+                const relMeta = getReleaseMeta(mod);
 
-                const circleBg = isCompleted
-                  ? 'var(--status-completed)'
+                const circleBg = isCompleted ? 'var(--status-completed)'
                   : isCurrent ? 'var(--accent)'
                   : isLocked ? 'var(--surface-3)'
                   : 'var(--accent-light)';
-                const circleBorder = (!isCompleted && !isCurrent && !isLocked) ? '2px solid var(--accent)'
+                const circleBorder = (!isCompleted && !isCurrent && !isLocked)
+                  ? '2px solid var(--accent)'
                   : isLocked ? '2px solid var(--border)' : 'none';
 
                 return (
                   <div key={mod.id} style={{ position: 'relative', animationDelay: `${idx * 30}ms` }}>
-                    {/* Timeline node — lock is clickable for locked modules */}
+                    {/* Timeline node */}
                     {isLocked && !earlyReleaseEnabled ? (
                       <button
                         title="Click to unlock early access"
@@ -447,8 +522,7 @@ export default function LearnerHomePage() {
                           border: '2px solid var(--border)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           cursor: unlocking ? 'default' : 'pointer',
-                          zIndex: 1,
-                          padding: 0,
+                          zIndex: 1, padding: 0,
                           transition: 'background 150ms, border-color 150ms',
                         }}
                         onMouseEnter={e => {
@@ -462,8 +536,7 @@ export default function LearnerHomePage() {
                           (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
                         }}
                       >
-                        {/* Lock SVG */}
-                        <svg width="9" height="11" viewBox="0 0 9 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <svg width="9" height="11" viewBox="0 0 9 11" fill="none">
                           <rect x="0.75" y="4.75" width="7.5" height="5.5" rx="1.25" stroke="var(--text-tertiary)" strokeWidth="1.25"/>
                           <path d="M2.5 4.5V3A2 2 0 0 1 6.5 3v1.5" stroke="var(--text-tertiary)" strokeWidth="1.25" strokeLinecap="round"/>
                         </svg>
@@ -483,7 +556,9 @@ export default function LearnerHomePage() {
                       </div>
                     )}
 
+                    {/* Module card */}
                     <div
+                      ref={el => { moduleRefs.current[mod.id] = el; }}
                       className="card"
                       onClick={() => isClickable && navigate(`/learner/module/${mod.id}`)}
                       style={{
@@ -492,19 +567,22 @@ export default function LearnerHomePage() {
                         opacity: isLocked && !earlyReleaseEnabled ? 0.75 : 1,
                         borderColor: isCurrent ? 'var(--accent-mid)' : undefined,
                         background: isCurrent ? 'var(--accent-light)' : undefined,
-                        transition: 'transform var(--duration-base) var(--ease-out)',
+                        transition: 'transform var(--duration-base) var(--ease-out), box-shadow 400ms ease',
                       }}
-                      onMouseEnter={isClickable ? (e) => { (e.currentTarget as HTMLDivElement).style.transform = 'translateX(3px)'; } : undefined}
-                      onMouseLeave={isClickable ? (e) => { (e.currentTarget as HTMLDivElement).style.transform = ''; } : undefined}
+                      onMouseEnter={isClickable ? e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateX(3px)'; } : undefined}
+                      onMouseLeave={isClickable ? e => { (e.currentTarget as HTMLDivElement).style.transform = ''; } : undefined}
                     >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                      {/* Card header row */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           {mod.domain_name && (
-                            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 3, letterSpacing: '0.04em', color: isLocked ? 'var(--text-tertiary)' : 'var(--accent-dark)' }}>
+                            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 3, letterSpacing: '0.04em',
+                              color: isLocked ? 'var(--text-tertiary)' : 'var(--accent-dark)' }}>
                               {mod.domain_name}
                             </div>
                           )}
-                          <div style={{ fontWeight: isCurrent ? 600 : 500, fontSize: isCurrent ? 15 : 14, color: isLocked ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.3 }}>
+                          <div style={{ fontWeight: isCurrent ? 600 : 500, fontSize: isCurrent ? 15 : 14,
+                            color: isLocked ? 'var(--text-secondary)' : 'var(--text-primary)', lineHeight: 1.3 }}>
                             {mod.title}
                           </div>
                           {isCurrent && mod.objective && (
@@ -513,9 +591,21 @@ export default function LearnerHomePage() {
                             </p>
                           )}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                          {isCompleted && (
-                            <span style={{ fontSize: 11, color: 'var(--status-completed)', fontWeight: 600, paddingTop: 2 }}>Done</span>
+
+                        {/* Right: release date + save */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                          {relMeta && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {relMeta.badge && (
+                                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--status-completed)',
+                                  background: '#DCFCE7', borderRadius: 4, padding: '1px 5px', letterSpacing: '0.04em' }}>
+                                  {relMeta.badge}
+                                </span>
+                              )}
+                              <span style={{ fontSize: 11, fontWeight: 500, color: relMeta.color }}>
+                                {relMeta.label}
+                              </span>
+                            </div>
                           )}
                           {!isLocked && (
                             <SaveButton moduleId={mod.id} saved={isSaved} onToggle={handleToggleSave} />
@@ -523,18 +613,30 @@ export default function LearnerHomePage() {
                         </div>
                       </div>
 
+                      {/* CTA row */}
                       {isCurrent && (
-                        <div style={{ marginTop: 12 }}>
+                        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                           <button className="btn btn-primary btn-sm">
                             {mod.status === 'in_progress' ? 'Continue →' : 'Start module →'}
                           </button>
+                          {mod.status === 'in_progress' && mod.started_at && (
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                              Last accessed {fmtDate(mod.started_at)}
+                            </span>
+                          )}
+                          {mod.status === 'completed' && mod.completed_at && (
+                            <span style={{ fontSize: 11, color: 'var(--status-completed)' }}>
+                              Completed {fmtDate(mod.completed_at)}
+                            </span>
+                          )}
                         </div>
                       )}
 
+                      {/* Locked hint */}
                       {isLocked && !earlyReleaseEnabled && (
                         <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>
                           {mod.release_date_calculated
-                            ? `Unlocks ${new Date(mod.release_date_calculated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — click the lock to access early`
+                            ? `Unlocks ${fmtDate(mod.release_date_calculated)} — click the lock to access early`
                             : 'Coming soon — click the lock to access early'}
                         </div>
                       )}
@@ -545,7 +647,7 @@ export default function LearnerHomePage() {
             </div>
           </div>
 
-          {/* Saved content section */}
+          {/* Saved section */}
           {savedModules.length > 0 && (
             <div style={{ marginTop: 40 }}>
               <h4 style={{ marginBottom: 14, fontSize: 13, color: 'var(--text-secondary)',
@@ -569,47 +671,27 @@ export default function LearnerHomePage() {
             </div>
           )}
         </div>
-
-        {/* Right: Calendar + Streak */}
-        <div style={{ width: 280, flexShrink: 0 }}>
-          <div style={{ position: 'sticky', top: 24 }}>
-            <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)',
-              letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
-              Release Schedule
-            </p>
-            <MiniCalendar modules={modules} />
-            <StreakWidget modules={modules} />
-          </div>
-        </div>
       </div>
 
       {/* Welcome card — floating bottom-right */}
       {showWelcome && (
         <div style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          width: 300,
-          background: '#F5F3FF',
-          border: '1px solid #DDD6FE',
-          borderRadius: 16,
-          padding: '20px 22px',
-          boxShadow: '0 8px 32px rgba(109,40,217,0.12)',
-          zIndex: 50,
+          position: 'fixed', bottom: 24, right: 24, width: 300,
+          background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 16,
+          padding: '20px 22px', boxShadow: '0 8px 32px rgba(109,40,217,0.12)', zIndex: 50,
         }}>
           <button onClick={dismissWelcome} style={{
             position: 'absolute', top: 12, right: 14,
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: '#9CA3AF', fontSize: 20, lineHeight: 1, padding: 0,
+            background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', fontSize: 20, lineHeight: 1, padding: 0,
           }}>×</button>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#1E1B4B', marginBottom: 8 }}>
             Welcome — here's how this works
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { icon: '⊟', text: 'Each module has a short resource plus a quick check-in at the end.' },
-              { icon: '◉', text: 'New modules release automatically — you\'ll get notified by email or text the moment they drop.' },
-              { icon: '◈', text: 'Your login link works automatically — bookmark it for quick access anytime.' },
+              { icon: '⊟', text: "Each module has a short resource plus a quick check-in at the end." },
+              { icon: '◉', text: "New modules release automatically — you'll get notified by email or text the moment they drop." },
+              { icon: '◈', text: "Your login link works automatically — bookmark it for quick access anytime." },
             ].map(({ icon, text }) => (
               <div key={icon} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1, color: '#7C3AED' }}>{icon}</span>
@@ -617,14 +699,11 @@ export default function LearnerHomePage() {
               </div>
             ))}
           </div>
-          <button
-            onClick={dismissWelcome}
-            style={{
-              marginTop: 16, width: '100%', padding: '9px 16px',
-              background: '#7C3AED', color: 'white', border: 'none',
-              borderRadius: 100, fontWeight: 600, fontSize: 13, cursor: 'pointer',
-            }}
-          >
+          <button onClick={dismissWelcome} style={{
+            marginTop: 16, width: '100%', padding: '9px 16px',
+            background: '#7C3AED', color: 'white', border: 'none',
+            borderRadius: 100, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+          }}>
             Got it — let's go →
           </button>
         </div>
