@@ -266,20 +266,20 @@ function MiniCalendar({ modules, onModuleClick }: MiniCalendarProps) {
           <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 7 }}>
             Upcoming
           </div>
-          {upcomingInMonth.slice(0, 4).flatMap(dateStr => {
+          {upcomingInMonth.flatMap(dateStr => {
             const date = new Date(dateStr + 'T12:00:00');
-            return (releaseDates[dateStr] || []).map(m => (
-              <div key={m.id}
-                onClick={() => onModuleClick(m.id)}
-                style={{ display: 'flex', gap: 7, marginBottom: 6, alignItems: 'flex-start', cursor: 'pointer' }}
-              >
-                <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, minWidth: 34, flexShrink: 0, paddingTop: 1 }}>
-                  {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{m.title}</span>
-              </div>
-            ));
-          })}
+            return (releaseDates[dateStr] || []).map(m => ({ dateStr, date, m }));
+          }).slice(0, 5).map(({ dateStr, date, m }) => (
+            <div key={m.id}
+              onClick={() => onModuleClick(m.id)}
+              style={{ display: 'flex', gap: 7, marginBottom: 6, alignItems: 'flex-start', cursor: 'pointer' }}
+            >
+              <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, minWidth: 34, flexShrink: 0, paddingTop: 1 }}>
+                {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{m.title}</span>
+            </div>
+          ))}
         </div>
       )}
 
