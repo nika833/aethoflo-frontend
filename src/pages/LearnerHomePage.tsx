@@ -434,18 +434,54 @@ export default function LearnerHomePage() {
 
                 return (
                   <div key={mod.id} style={{ position: 'relative', animationDelay: `${idx * 30}ms` }}>
-                    <div style={{
-                      position: 'absolute', left: -36, top: 16,
-                      width: 20, height: 20, borderRadius: '50%',
-                      background: circleBg, border: circleBorder,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, fontWeight: 700,
-                      color: isCompleted ? 'white' : isCurrent ? 'white' : 'var(--text-tertiary)',
-                      zIndex: 1,
-                      boxShadow: isCurrent ? '0 0 0 4px var(--accent-light)' : 'none',
-                    }}>
-                      {isCompleted ? '✓' : null}
-                    </div>
+                    {/* Timeline node — lock is clickable for locked modules */}
+                    {isLocked && !earlyReleaseEnabled ? (
+                      <button
+                        title="Click to unlock early access"
+                        onClick={() => handleUnlockEarlyAccess()}
+                        disabled={unlocking}
+                        style={{
+                          position: 'absolute', left: -36, top: 16,
+                          width: 20, height: 20, borderRadius: '50%',
+                          background: unlocking ? 'var(--accent-light)' : 'var(--surface-3)',
+                          border: '2px solid var(--border)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: unlocking ? 'default' : 'pointer',
+                          zIndex: 1,
+                          padding: 0,
+                          transition: 'background 150ms, border-color 150ms',
+                        }}
+                        onMouseEnter={e => {
+                          if (!unlocking) {
+                            (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-light)';
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent-mid)';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-3)';
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+                        }}
+                      >
+                        {/* Lock SVG */}
+                        <svg width="9" height="11" viewBox="0 0 9 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="0.75" y="4.75" width="7.5" height="5.5" rx="1.25" stroke="var(--text-tertiary)" strokeWidth="1.25"/>
+                          <path d="M2.5 4.5V3A2 2 0 0 1 6.5 3v1.5" stroke="var(--text-tertiary)" strokeWidth="1.25" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    ) : (
+                      <div style={{
+                        position: 'absolute', left: -36, top: 16,
+                        width: 20, height: 20, borderRadius: '50%',
+                        background: circleBg, border: circleBorder,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 700,
+                        color: isCompleted ? 'white' : isCurrent ? 'white' : 'var(--text-tertiary)',
+                        zIndex: 1,
+                        boxShadow: isCurrent ? '0 0 0 4px var(--accent-light)' : 'none',
+                      }}>
+                        {isCompleted ? '✓' : null}
+                      </div>
+                    )}
 
                     <div
                       className="card"
@@ -496,20 +532,10 @@ export default function LearnerHomePage() {
                       )}
 
                       {isLocked && !earlyReleaseEnabled && (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 12, flexWrap: 'wrap' }}>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                            {mod.release_date_calculated
-                              ? `Unlocks ${new Date(mod.release_date_calculated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-                              : 'Coming soon'}
-                          </div>
-                          <button
-                            className="btn btn-sm"
-                            style={{ fontSize: 11, padding: '3px 10px', opacity: unlocking ? 0.6 : 1 }}
-                            onClick={(e) => { e.stopPropagation(); handleUnlockEarlyAccess(); }}
-                            disabled={unlocking}
-                          >
-                            {unlocking ? 'Unlocking…' : 'Unlock for early access'}
-                          </button>
+                        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>
+                          {mod.release_date_calculated
+                            ? `Unlocks ${new Date(mod.release_date_calculated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — click the lock to access early`
+                            : 'Coming soon — click the lock to access early'}
                         </div>
                       )}
                     </div>
