@@ -365,6 +365,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
   const [dragSource, setDragSource] = useState<{ rmId: string; domainId: string | null } | null>(null);
   const [dragTarget, setDragTarget] = useState<{ week: number; domainId: string | null } | null>(null);
   const [libraryDrag, setLibraryDrag] = useState<ModuleSkill | null>(null);
+  const [liveNotice, setLiveNotice] = useState<string | null>(null);
   const [scheduleDay, setScheduleDay] = useState<number | null>(roadmap.release_day_of_week);
   const [scheduleHour, setScheduleHour] = useState<number | null>(roadmap.release_hour);
   const [editingModule, setEditingModule] = useState<GridModule | null>(null);
@@ -422,6 +423,11 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
         release_days: created.release_days ?? null,
         release_date: created.release_date ?? null,
       }]);
+      if ((created.affected_learners ?? 0) > 0) {
+        const n = created.affected_learners;
+        setLiveNotice(`${n} learner${n > 1 ? 's' : ''} who passed Week ${week} will receive "${mod.title}" as their next module in 7 days.`);
+        setTimeout(() => setLiveNotice(null), 8000);
+      }
     } catch { setError('Could not add module.'); }
   };
 
@@ -461,6 +467,19 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
       </div>
 
       {error && <div style={{ marginBottom: 12 }}><Alert type="error">{error}</Alert></div>}
+
+      {liveNotice && (
+        <div style={{
+          marginBottom: 14, padding: '10px 14px', borderRadius: 8,
+          background: '#FFF7ED', border: '1px solid #FED7AA',
+          fontSize: 13, color: '#92400E', display: 'flex', alignItems: 'flex-start', gap: 8,
+        }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⚠</span>
+          <div>
+            <strong>Live roadmap update:</strong> {liveNotice}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <SchedulePill
