@@ -594,7 +594,7 @@ export default function LearnerModulePage() {
         </div>
       )}
 
-      {/* Repeat check-in banner */}
+      {/* Refresher banner */}
       {isRepeat && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 24,
@@ -603,7 +603,7 @@ export default function LearnerModulePage() {
         }}>
           <span style={{ fontSize: 15, flexShrink: 0 }}>↻</span>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#92400E' }}>Repeat check-in</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#92400E' }}>Refresher</div>
             <div style={{ fontSize: 12, color: '#B45309', marginTop: 2 }}>
               You completed this module{priorDate ? ` on ${priorDate}` : ' before'}. Your previous responses are pre-filled — update anything that's changed.
             </div>

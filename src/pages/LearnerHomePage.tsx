@@ -720,7 +720,7 @@ export default function LearnerHomePage() {
                               <span style={{ fontSize: 10, fontWeight: 600, color: '#92400E',
                                 background: '#FEF3C7', border: '1px solid #FDE68A',
                                 borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
-                                ↻ Repeat
+                                ↻ Refresher
                               </span>
                             )}
                           </div>
