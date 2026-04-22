@@ -121,6 +121,7 @@ interface ModuleSkill { id: string; title: string; domain_id: string | null; dom
 interface GridModule {
   id: string; module_skill_id: string; title: string;
   week_number: number; module_domain_id: string | null; domain_name: string | null;
+  release_rule: string; release_days: number | null; release_date: string | null;
 }
 
 const MAX_PER_WEEK = 4;
@@ -133,12 +134,110 @@ const HEADER_BG = '#FEF0E9';
 const HEADER_TEXT = '#C96B47';
 const HEADER_BORDER = 'rgba(201,107,71,0.2)';
 
-function ModuleChip({ mod, repeatCount, onRemove, onDragStart }: {
+function ReleaseRuleModal({ roadmapId, mod, onSaved, onClose }: {
+  roadmapId: string; mod: GridModule;
+  onSaved: (updates: Partial<GridModule>) => void; onClose: () => void;
+}) {
+  const [rule, setRule] = useState(mod.release_rule || 'immediate');
+  const [days, setDays] = useState<number>(mod.release_days ?? 7);
+  const [date, setDate] = useState(mod.release_date ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = { release_rule: rule };
+      if (rule === 'days_offset') payload.release_days = days;
+      else payload.release_days = null;
+      if (rule === 'fixed_date') payload.release_date = date;
+      else payload.release_date = null;
+      await roadmapsApi.updateModule(roadmapId, mod.id, payload);
+      onSaved({
+        release_rule: rule,
+        release_days: rule === 'days_offset' ? days : null,
+        release_date: rule === 'fixed_date' ? date : null,
+      });
+      onClose();
+    } finally { setSaving(false); }
+  };
+
+  const ruleLabels: Record<string, string> = {
+    immediate: 'Immediate — unlocks on activation date',
+    days_offset: 'Days after activation',
+    after_previous: 'After previous module is completed',
+    fixed_date: 'Fixed date',
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.22)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: '#fff', borderRadius: 14, padding: 24, width: 340,
+        boxShadow: '0 12px 40px rgba(0,0,0,0.16)',
+      }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Release rule</div>
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>{mod.title}</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {Object.entries(ruleLabels).map(([key, label]) => (
+            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+              padding: '8px 12px', borderRadius: 8,
+              background: rule === key ? 'var(--accent-light)' : 'var(--surface-2)',
+              border: `1px solid ${rule === key ? 'var(--accent-mid)' : 'transparent'}`,
+            }}>
+              <input type="radio" name="rule" value={key} checked={rule === key}
+                onChange={() => setRule(key)} style={{ accentColor: 'var(--accent)' }} />
+              <span style={{ fontSize: 13 }}>{label}</span>
+            </label>
+          ))}
+        </div>
+
+        {rule === 'days_offset' && (
+          <div className="form-group" style={{ marginBottom: 16 }}>
+            <label className="form-label">Days after activation date</label>
+            <input type="number" className="form-input" min={0} value={days}
+              onChange={(e) => setDays(parseInt(e.target.value) || 0)} style={{ maxWidth: 120 }} />
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+              Week 1 = 0 days · Week 2 = 7 days · Week 3 = 14 days · etc.
+            </div>
+          </div>
+        )}
+
+        {rule === 'fixed_date' && (
+          <div className="form-group" style={{ marginBottom: 16 }}>
+            <label className="form-label">Release on date</label>
+            <input type="date" className="form-input" value={date}
+              onChange={(e) => setDate(e.target.value)} />
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+            {saving ? <Spinner size={13} /> : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModuleChip({ mod, repeatCount, onRemove, onDragStart, onEdit }: {
   mod: GridModule; repeatCount: number;
   onRemove: () => void; onDragStart: (e: React.DragEvent) => void;
+  onEdit: () => void;
 }) {
-  const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
+
+  const ruleShort: Record<string, string> = {
+    immediate: '',
+    days_offset: mod.release_days != null ? `+${mod.release_days}d` : '',
+    after_previous: 'after prev',
+    fixed_date: mod.release_date ? new Date(mod.release_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
+  };
+  const ruleBadge = ruleShort[mod.release_rule] || '';
 
   return (
     <div
@@ -166,10 +265,15 @@ function ModuleChip({ mod, repeatCount, onRemove, onDragStart }: {
         transition: 'box-shadow 120ms, transform 120ms',
       }}
     >
-      <span
-        onClick={(e) => { e.stopPropagation(); navigate(`/admin/modules?edit=${mod.module_skill_id}`); }}
-        style={{ flex: 1, lineHeight: 1.35, cursor: 'pointer' }}
-      >{mod.title}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          style={{ lineHeight: 1.35, cursor: 'pointer', display: 'block' }}
+        >{mod.title}</span>
+        {ruleBadge && (
+          <span style={{ fontSize: 10, color: 'var(--accent-dark)', fontWeight: 500 }}>{ruleBadge}</span>
+        )}
+      </div>
       {repeatCount > 1 && (
         <span style={{
           background: 'var(--accent)', color: '#fff', fontSize: 10, fontWeight: 700,
@@ -254,6 +358,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
   const [libraryDrag, setLibraryDrag] = useState<ModuleSkill | null>(null);
   const [scheduleDay, setScheduleDay] = useState<number | null>(roadmap.release_day_of_week);
   const [scheduleHour, setScheduleHour] = useState<number | null>(roadmap.release_hour);
+  const [editingModule, setEditingModule] = useState<GridModule | null>(null);
 
   useEffect(() => {
     Promise.all([roadmapsApi.get(roadmap.id), domainsApi.list(), moduleSkillsApi.list()])
@@ -265,6 +370,9 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
           week_number: (m.week_number as number) || 1,
           module_domain_id: (m.module_domain_id as string | null) ?? null,
           domain_name: (m.domain_name as string | null) ?? null,
+          release_rule: (m.release_rule as string) || 'immediate',
+          release_days: (m.release_days as number | null) ?? null,
+          release_date: (m.release_date as string | null) ?? null,
         }));
         setGridModules(mList);
         setDomains((doms as Domain[]).sort((a, b) => a.display_order - b.display_order));
@@ -298,6 +406,9 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
         title: created.title || mod.title, week_number: created.week_number || week,
         module_domain_id: created.module_domain_id ?? mod.domain_id,
         domain_name: created.domain_name ?? mod.domain_name,
+        release_rule: created.release_rule || 'immediate',
+        release_days: created.release_days ?? null,
+        release_date: created.release_date ?? null,
       }]);
     } catch { setError('Could not add module.'); }
   };
@@ -439,6 +550,7 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
                           <ModuleChip key={mod.id} mod={mod} repeatCount={repeatCount(mod.module_skill_id)}
                             onRemove={() => removeModule(mod.id)}
                             onDragStart={(e) => { e.stopPropagation(); setDragSource({ rmId: mod.id, domainId: mod.module_domain_id }); }}
+                            onEdit={() => setEditingModule(mod)}
                           />
                         ))}
                         {cellMods.length === 0 && !isTarget && (
@@ -499,6 +611,18 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
       {picker && (
         <ModulePicker domainId={picker.domainId} domainName={picker.domainName} week={picker.week}
           modules={library} onPick={(m) => addModule(m, picker.week)} onClose={() => setPicker(null)} />
+      )}
+
+      {editingModule && (
+        <ReleaseRuleModal
+          roadmapId={roadmap.id}
+          mod={editingModule}
+          onSaved={(updates) => {
+            setGridModules((prev) => prev.map((m) => m.id === editingModule.id ? { ...m, ...updates } : m));
+            setEditingModule(null);
+          }}
+          onClose={() => setEditingModule(null)}
+        />
       )}
     </div>
   );
