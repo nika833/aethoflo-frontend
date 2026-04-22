@@ -348,6 +348,7 @@ export default function LearnerHomePage() {
   const [loading, setLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const [unlocking, setUnlocking] = useState(false);
+  const [lockedFlash, setLockedFlash] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 700);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -640,7 +641,17 @@ export default function LearnerHomePage() {
                     <div
                       ref={el => { moduleRefs.current[mod.id] = el; }}
                       className="card"
-                      onClick={() => isClickable && navigate(`/learner/module/${mod.id}`)}
+                      onClick={() => {
+                        if (isLocked) {
+                          const msg = mod.release_date_calculated
+                            ? `Available ${fmtDate(mod.release_date_calculated)} — click the lock to access early`
+                            : 'Not yet released — click the lock to access early';
+                          setLockedFlash(msg);
+                          setTimeout(() => setLockedFlash(null), 3000);
+                        } else {
+                          navigate(`/learner/module/${mod.id}`);
+                        }
+                      }}
                       style={{
                         padding: isCurrent ? '16px 18px' : '11px 16px',
                         cursor: isClickable ? 'pointer' : 'default',
@@ -729,6 +740,19 @@ export default function LearnerHomePage() {
 
         </div>
       </div>
+
+      {/* Locked module toast */}
+      {lockedFlash && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#1E1B4B', color: 'white', borderRadius: 100,
+          padding: '10px 20px', fontSize: 13, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)', zIndex: 2000,
+          whiteSpace: 'nowrap', animation: 'fadeUp 200ms var(--ease-out) both',
+        }}>
+          🔒 {lockedFlash}
+        </div>
+      )}
 
       {/* Welcome card — fixed bottom-right on desktop only */}
       {showWelcome && !isMobile && (
