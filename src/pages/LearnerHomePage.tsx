@@ -347,7 +347,7 @@ export default function LearnerHomePage() {
   const [data, setData] = useState<LearnerHomeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
-  const [unlocking, setUnlocking] = useState(false);
+  const [unlockingId, setUnlockingId] = useState<string | null>(null);
   const [lockedFlash, setLockedFlash] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 700);
@@ -403,14 +403,14 @@ export default function LearnerHomePage() {
     });
   };
 
-  const handleUnlockEarlyAccess = async () => {
-    setUnlocking(true);
+  const handleUnlockModuleEarly = async (moduleId: string) => {
+    setUnlockingId(moduleId);
     try {
-      await learnerProgressApi.unlockEarlyAccess();
+      await learnerProgressApi.unlockModuleEarly(moduleId);
       const fresh = await learnerProgressApi.getMy();
       setData(fresh);
     } finally {
-      setUnlocking(false);
+      setUnlockingId(null);
     }
   };
 
@@ -630,23 +630,23 @@ export default function LearnerHomePage() {
                 return (
                   <div key={mod.id} style={{ position: 'relative', animationDelay: `${idx * 30}ms` }}>
                     {/* Timeline node */}
-                    {isLocked && !earlyReleaseEnabled ? (
+                    {isLocked ? (
                       <button
-                        title="Click to unlock early access"
-                        onClick={() => handleUnlockEarlyAccess()}
-                        disabled={unlocking}
+                        title={earlyReleaseEnabled ? 'Unlock this module early' : 'Locked — ask your admin to enable early access'}
+                        onClick={earlyReleaseEnabled ? () => handleUnlockModuleEarly(mod.id) : undefined}
+                        disabled={!earlyReleaseEnabled || unlockingId === mod.id}
                         style={{
                           position: 'absolute', left: -36, top: 16,
                           width: 20, height: 20, borderRadius: '50%',
-                          background: unlocking ? 'var(--accent-light)' : 'var(--surface-3)',
+                          background: unlockingId === mod.id ? 'var(--accent-light)' : 'var(--surface-3)',
                           border: '2px solid var(--border)',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          cursor: unlocking ? 'default' : 'pointer',
+                          cursor: earlyReleaseEnabled && unlockingId !== mod.id ? 'pointer' : 'default',
                           zIndex: 1, padding: 0,
                           transition: 'background 150ms, border-color 150ms',
                         }}
                         onMouseEnter={e => {
-                          if (!unlocking) {
+                          if (earlyReleaseEnabled && unlockingId !== mod.id) {
                             (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-light)';
                             (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent-mid)';
                           }
@@ -694,7 +694,7 @@ export default function LearnerHomePage() {
                       style={{
                         padding: isCurrent ? '16px 18px' : '11px 16px',
                         cursor: isClickable ? 'pointer' : 'default',
-                        opacity: isLocked && !earlyReleaseEnabled ? 0.75 : 1,
+                        opacity: isLocked ? 0.75 : 1,
                         borderColor: isCurrent ? 'var(--accent-mid)' : undefined,
                         background: isCurrent ? 'var(--accent-light)' : undefined,
                         transition: 'transform var(--duration-base) var(--ease-out), box-shadow 400ms ease',
@@ -771,12 +771,29 @@ export default function LearnerHomePage() {
                         </div>
                       )}
 
-                      {/* Locked hint */}
-                      {isLocked && !earlyReleaseEnabled && (
-                        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>
-                          {mod.release_date_calculated
-                            ? `Unlocks ${fmtDate(mod.release_date_calculated)} — click the lock to access early`
-                            : 'Coming soon — click the lock to access early'}
+                      {/* Locked hint / early unlock CTA */}
+                      {isLocked && (
+                        <div style={{ marginTop: 8 }}>
+                          {earlyReleaseEnabled ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleUnlockModuleEarly(mod.id); }}
+                              disabled={unlockingId === mod.id}
+                              style={{
+                                fontSize: 11, fontWeight: 600, color: 'var(--accent)',
+                                background: 'none', border: '1px solid var(--accent-mid)',
+                                borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
+                                opacity: unlockingId === mod.id ? 0.6 : 1,
+                              }}
+                            >
+                              {unlockingId === mod.id ? 'Unlocking…' : 'Unlock early access'}
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                              {mod.release_date_calculated
+                                ? `Assigned ${fmtDate(mod.release_date_calculated)}`
+                                : 'Coming soon'}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
