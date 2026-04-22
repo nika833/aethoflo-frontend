@@ -113,6 +113,8 @@ export const learnerProgressApi = {
     api.post(`/learner-progress/save/${moduleId}`).then((r) => r.data as { saved: boolean }),
   getSaved: () =>
     api.get('/learner-progress/saved').then((r) => r.data as { id: string; title: string; objective: string | null; domain_name: string | null; saved_at: string }[]),
+  saveChecklist: (roadmapModuleId: string, checklistTemplateId: string, responses: { template_item_id: string; value_text?: string | null; value_bool?: boolean | null; value_number?: number | null }[]) =>
+    api.patch(`/learner-progress/module/${roadmapModuleId}/checklist`, { checklist_template_id: checklistTemplateId, responses }).then((r) => r.data),
 };
 
 export const usersApi = {

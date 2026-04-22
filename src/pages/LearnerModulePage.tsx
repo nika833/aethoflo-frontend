@@ -14,12 +14,19 @@ interface ChecklistItem {
 interface ChecklistTemplate {
   id: string; title: string; items: ChecklistItem[];
 }
+interface ChecklistResponseItem {
+  template_item_id: string;
+  value_bool: boolean | null;
+  value_text: string | null;
+  value_number: number | null;
+}
 interface ModuleDetail {
   id: string; title: string; objective: string | null;
   why_it_matters: string | null; context_note: string | null;
   what_to_do: string | null; status: string;
   media: MediaItem[]; checklist: ChecklistTemplate | null;
   is_saved?: boolean;
+  existing_response?: { response_items: ChecklistResponseItem[] } | null;
 }
 
 function StarRating({ value, onChange }: { value: number; onChange: (n: number) => void }) {
@@ -111,12 +118,21 @@ export default function LearnerModulePage() {
       .then((data) => {
         setMod(data);
         setSaved(data.is_saved ?? false);
-        // Restore draft checklist responses from localStorage
-        if (data.status !== 'completed') {
-          const draft = localStorage.getItem(`aethoflo_draft_${roadmapModuleId}`);
-          if (draft) {
-            try { setResponses(JSON.parse(draft)); } catch {}
+        // Restore saved checklist responses from DB
+        if (data.existing_response?.response_items?.length) {
+          const restored: Record<string, { bool?: boolean; text?: string; number?: number }> = {};
+          for (const item of data.existing_response.response_items) {
+            restored[item.template_item_id] = {
+              bool:   item.value_bool   ?? undefined,
+              text:   item.value_text   ?? undefined,
+              number: item.value_number ?? undefined,
+            };
           }
+          setResponses(restored);
+        } else {
+          // Fall back to localStorage draft if no DB data
+          const draft = localStorage.getItem(`aethoflo_draft_${roadmapModuleId}`);
+          if (draft) { try { setResponses(JSON.parse(draft)); } catch {} }
         }
       })
       .catch((err: any) => {
@@ -128,17 +144,26 @@ export default function LearnerModulePage() {
       .finally(() => setLoading(false));
   }, [roadmapModuleId]);
 
-  // Autosave draft to localStorage 800ms after any response change
+  // Autosave checklist to DB 1s after any change
   useEffect(() => {
-    if (!roadmapModuleId || Object.keys(responses).length === 0 || submitted) return;
+    if (!roadmapModuleId || !mod?.checklist || Object.keys(responses).length === 0) return;
     if (draftTimer.current) clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(() => {
-      localStorage.setItem(`aethoflo_draft_${roadmapModuleId}`, JSON.stringify(responses));
-      setDraftSaved(true);
-      setTimeout(() => setDraftSaved(false), 2000);
-    }, 800);
+    draftTimer.current = setTimeout(async () => {
+      const items = mod.checklist!.items.map(item => ({
+        template_item_id: item.id,
+        value_bool:   responses[item.id]?.bool   ?? null,
+        value_text:   responses[item.id]?.text   ?? null,
+        value_number: responses[item.id]?.number ?? null,
+      }));
+      try {
+        await learnerProgressApi.saveChecklist(roadmapModuleId, mod.checklist!.id, items);
+        localStorage.removeItem(`aethoflo_draft_${roadmapModuleId}`);
+        setDraftSaved(true);
+        setTimeout(() => setDraftSaved(false), 2000);
+      } catch {}
+    }, 1000);
     return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
-  }, [responses, roadmapModuleId, submitted]);
+  }, [responses, roadmapModuleId, mod]);
 
   const handleCheckbox = (itemId: string, checked: boolean) =>
     setResponses((r) => ({ ...r, [itemId]: { bool: checked } }));
@@ -404,11 +429,32 @@ export default function LearnerModulePage() {
           letterSpacing: '0.06em', textTransform: 'uppercase', margin: 0 }}>
           {mod.checklist.title}
         </h4>
-        {draftSaved && (
-          <span style={{ fontSize: 11, color: 'var(--status-completed)', fontWeight: 500, animation: 'fadeUp 200ms ease both' }}>
-            ✓ Draft saved
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {draftSaved && (
+            <span style={{ fontSize: 11, color: 'var(--status-completed)', fontWeight: 500 }}>
+              ✓ Saved
+            </span>
+          )}
+          {Object.keys(responses).length > 0 && (
+            <button
+              onClick={async () => {
+                setResponses({});
+                if (roadmapModuleId && mod.checklist) {
+                  try {
+                    await learnerProgressApi.saveChecklist(roadmapModuleId, mod.checklist.id, []);
+                  } catch {}
+                }
+              }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 11, color: 'var(--text-tertiary)', padding: 0,
+                textDecoration: 'underline',
+              }}
+            >
+              Clear & restart
+            </button>
+          )}
+        </div>
       </div>
       <div className="card card-padded" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {mod.checklist.items.map((item) => (
