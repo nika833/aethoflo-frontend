@@ -22,6 +22,7 @@ export default function LearnerProgressPage() {
   const [data, setData] = useState<{
     modules: ModuleWithStatus[];
     activation_date: string | null;
+    roadmap_title: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ export default function LearnerProgressPage() {
   useEffect(() => {
     learnerProgressApi.getMy().then((d) => {
       if (d.assignment) {
-        setData({ modules: d.modules, activation_date: d.assignment.activation_date });
+        setData({ modules: d.modules, activation_date: d.assignment.activation_date, roadmap_title: d.assignment.roadmap_title });
       }
     }).finally(() => setLoading(false));
   }, []);
@@ -37,7 +38,7 @@ export default function LearnerProgressPage() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size={28} /></div>;
   if (!data?.modules.length) return <EmptyState icon="◉" title="No progress yet" description="Complete modules on your roadmap to see your timeline here." />;
 
-  const { modules, activation_date } = data;
+  const { modules, activation_date, roadmap_title } = data;
   const completed = modules.filter((m) => m.status === 'completed');
   const totalPct = modules.length > 0 ? Math.round((completed.length / modules.length) * 100) : 0;
 
@@ -62,7 +63,7 @@ export default function LearnerProgressPage() {
         <div style={{ marginTop: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
             fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
-            <span>Overall: {completed.length} of {modules.length} modules complete</span>
+            <span>{roadmap_title}: {completed.length}/{modules.length} Completed</span>
             <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>{totalPct}%</span>
           </div>
           <div className="progress-bar">
