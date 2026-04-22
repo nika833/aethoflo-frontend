@@ -243,10 +243,11 @@ export default function AppShell() {
 
       {/* Sidebar — fixed overlay, never pushes content */}
       <aside
+        className="sidebar-full-height"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          position: 'fixed', top: 0, left: 0, height: '100vh', zIndex: 200,
+          position: 'fixed', top: 0, left: 0, zIndex: 200,
           width: expanded ? 220 : 60,
           background: SIDEBAR_BG,
           borderRight: `1px solid ${BORDER_COLOR}`,
