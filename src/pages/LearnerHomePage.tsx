@@ -436,8 +436,20 @@ export default function LearnerHomePage() {
   );
 
   const { assignment, current_module, modules, stats } = data;
-  const pct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
   const earlyReleaseEnabled = assignment.allow_early_release;
+
+  // Monthly progress — modules whose release date falls in the current calendar month
+  const now = new Date();
+  const monthName = now.toLocaleDateString('en-US', { month: 'long' });
+  const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthModules = modules.filter(m => {
+    const d = m.release_date_calculated;
+    return d && d.slice(0, 7) === monthYear;
+  });
+  const monthCompleted = monthModules.filter(m => m.status === 'completed').length;
+  const monthTotal = monthModules.length;
+  const monthPct = monthTotal > 0 ? Math.round((monthCompleted / monthTotal) * 100) : 0;
+  const monthAllDone = monthTotal > 0 && monthCompleted === monthTotal;
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -511,14 +523,33 @@ export default function LearnerHomePage() {
               <p style={{ fontSize: 14 }}>{assignment.roadmap_description}</p>
             )}
             <div style={{ marginTop: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between',
-                fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                <span>{stats.completed} of {stats.total} modules complete</span>
-                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{pct}%</span>
-              </div>
-              <div className="progress-bar">
-                <div className="progress-bar-fill" style={{ width: `${pct}%` }} />
-              </div>
+              {monthTotal === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+                  No modules scheduled for {monthName}
+                </p>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'baseline', fontSize: 13, marginBottom: 6 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      {monthName}'s Progress: {monthCompleted}/{monthTotal} modules
+                    </span>
+                    <span style={{
+                      fontWeight: 600,
+                      color: monthAllDone ? 'var(--status-completed)' : 'var(--text-primary)',
+                      fontSize: 13,
+                    }}>
+                      {monthPct}%
+                    </span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-bar-fill" style={{
+                      width: `${monthPct}%`,
+                      background: monthAllDone ? 'var(--status-completed)' : undefined,
+                    }} />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
