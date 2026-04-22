@@ -109,7 +109,7 @@ export default function LearnerModulePage() {
       .then((data) => {
         setMod(data);
         setSaved(data.is_saved ?? false);
-        if (data.status === 'completed') { setSubmitted(true); setPhase('peer'); }
+        // Don't enter submitted state on revisit — show content so learner can review
       })
       .catch((err: any) => {
         const status = err?.response?.status;
@@ -442,7 +442,18 @@ export default function LearnerModulePage() {
     </section>
   ) : null;
 
-  const ctaBlock = (
+  const isCompleted = mod.status === 'completed';
+
+  const ctaBlock = isCompleted ? (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '12px 16px', borderRadius: 'var(--radius-md)',
+      background: '#F0FDF4', border: '1px solid #BBF7D0',
+    }}>
+      <span style={{ fontSize: 16, color: 'var(--status-completed)' }}>✓</span>
+      <span style={{ fontSize: 14, fontWeight: 500, color: '#065F46' }}>You completed this module</span>
+    </div>
+  ) : (
     <>
       <button className="btn btn-primary btn-lg" onClick={() => setPhase('feedback')}
         disabled={!canAdvance()} style={{ width: '100%' }}>
@@ -463,8 +474,20 @@ export default function LearnerModulePage() {
         ← Back to roadmap
       </button>
 
-      {/* Step indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32 }}>
+      {/* Completed banner */}
+      {isCompleted && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24,
+          padding: '10px 16px', borderRadius: 'var(--radius-md)',
+          background: '#F0FDF4', border: '1px solid #BBF7D0',
+        }}>
+          <span style={{ fontSize: 15, color: 'var(--status-completed)' }}>✓</span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: '#065F46' }}>Completed — reviewing this module</span>
+        </div>
+      )}
+
+      {/* Step indicator — hidden for completed modules */}
+      {!isCompleted && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--accent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -478,7 +501,7 @@ export default function LearnerModulePage() {
             fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 700 }}>2</div>
           <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Your take</span>
         </div>
-      </div>
+      </div>}
 
       {isMobile ? (
         /* ── Mobile: single column, video between why-it-matters and note ── */
