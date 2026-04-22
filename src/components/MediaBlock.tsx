@@ -60,10 +60,12 @@ export default function MediaBlock({ item }: { item: MediaItem }) {
     return (
       <div>
         {item.title && <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--text-primary)' }}>{item.title}</div>}
-        <video controls style={{ width: '100%', borderRadius: 10, background: '#000', maxHeight: 420 }}>
-          <source src={url} />
-          Your browser does not support video playback.
-        </video>
+        <div style={{ position: 'relative', paddingBottom: '56.25%', borderRadius: 10, overflow: 'hidden', background: '#000' }}>
+          <video controls style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+            <source src={url} />
+            Your browser does not support video playback.
+          </video>
+        </div>
       </div>
     );
   }
