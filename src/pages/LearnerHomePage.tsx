@@ -231,8 +231,8 @@ function MiniCalendar({ modules, onModuleClick }: MiniCalendarProps) {
                   }}>✓</span>
                 )}
               </div>
-              {/* Orange dot below for release dates (not completed) */}
-              {hasRelease && !hasCompletion && (
+              {/* Orange dot below for all release dates */}
+              {hasRelease && (
                 <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', marginTop: 1 }} />
               )}
             </div>
