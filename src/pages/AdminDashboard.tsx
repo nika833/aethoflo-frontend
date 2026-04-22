@@ -165,7 +165,7 @@ export default function AdminDashboard() {
     <div className="animate-fade-up">
       <div style={{ marginBottom: 36 }}>
         <h2 style={{ marginBottom: 6 }}>Dashboard</h2>
-        <p style={{ fontSize: 14 }}>Overview of your training program</p>
+        <p style={{ fontSize: 14 }}>Overview of your designed journeys</p>
       </div>
 
       {/* Stat cards */}
