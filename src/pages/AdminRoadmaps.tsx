@@ -439,8 +439,12 @@ function RoadmapGrid({ roadmap, onBack }: { roadmap: Roadmap; onBack: () => void
   };
 
   const removeModule = async (rmId: string) => {
-    if (!confirm('Remove this module from the roadmap?')) return;
     try {
+      const { completions } = await roadmapsApi.moduleImpact(roadmap.id, rmId);
+      const msg = completions > 0
+        ? `This module has been completed by ${completions} learner${completions === 1 ? '' : 's'}. Removing it will permanently delete their completion records.\n\nRemove anyway?`
+        : 'Remove this module from the roadmap?';
+      if (!confirm(msg)) return;
       await roadmapsApi.removeModule(roadmap.id, rmId);
       setGridModules((prev) => prev.filter((m) => m.id !== rmId));
     } catch { setError('Could not remove module.'); }
