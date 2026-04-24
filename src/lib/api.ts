@@ -131,16 +131,33 @@ export const usersApi = {
   groups: () => api.get('/users/groups').then((r) => r.data as string[]),
 };
 
+export type PlanName = 'starter' | 'core' | 'growth' | 'pro' | 'enterprise';
+
+export const PLAN_TIERS: Record<PlanName, { label: string; max_admins: number; max_learners: number; white_label: boolean }> = {
+  starter:    { label: 'Starter',    max_admins: 1,   max_learners: 10,  white_label: false },
+  core:       { label: 'Core',       max_admins: 2,   max_learners: 25,  white_label: true  },
+  growth:     { label: 'Growth',     max_admins: 3,   max_learners: 50,  white_label: true  },
+  pro:        { label: 'Pro',        max_admins: 10,  max_learners: 200, white_label: true  },
+  enterprise: { label: 'Enterprise', max_admins: -1,  max_learners: -1,  white_label: true  },
+};
+
 export const superAdminApi = {
   listOrgs: () => api.get('/super-admin/orgs').then((r) => r.data),
-  createOrg: (d: { org_name: string; admin_name: string; admin_email: string }) =>
+  createOrg: (d: { org_name: string; admin_name: string; admin_email: string; plan?: PlanName }) =>
     api.post('/super-admin/orgs', d).then((r) => r.data),
-  updateOrg: (id: string, d: { name?: string; status?: 'active' | 'inactive' }) =>
+  updateOrg: (id: string, d: { name?: string; status?: 'active' | 'inactive'; plan?: PlanName; logo_url?: string | null }) =>
     api.patch(`/super-admin/orgs/${id}`, d).then((r) => r.data),
   resendInvite: (id: string) =>
     api.post(`/super-admin/orgs/${id}/resend-invite`).then((r) => r.data),
   addAdmin: (orgId: string, d: { admin_name: string; admin_email: string }) =>
     api.post(`/super-admin/orgs/${orgId}/admins`, d).then((r) => r.data),
+};
+
+export const orgApi = {
+  settings: () => api.get('/org/settings').then((r) => r.data as {
+    id: string; name: string; slug: string; plan: PlanName;
+    max_admins: number; max_learners: number; logo_url: string | null;
+  }),
 };
 
 export const mediaApi = {

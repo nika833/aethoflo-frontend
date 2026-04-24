@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../lib/authStore';
-import { domainsApi, moduleSkillsApi, roadmapsApi } from '../lib/api';
+import { domainsApi, moduleSkillsApi, roadmapsApi, orgApi } from '../lib/api';
 import api from '../lib/api';
 
 const ADMIN_NAV = [
@@ -223,8 +223,13 @@ export default function AppShell() {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
   const [showSetPassword, setShowSetPassword] = useState(false);
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
   const nav = user?.role === 'admin' ? ADMIN_NAV : LEARNER_NAV;
   const expanded = hovered;
+
+  useEffect(() => {
+    orgApi.settings().then((s) => { if (s.logo_url) setOrgLogoUrl(s.logo_url); }).catch(() => {});
+  }, []);
 
   const handleLogout = () => {
     clearAuth();
@@ -267,7 +272,9 @@ export default function AppShell() {
           transition: 'padding 200ms cubic-bezier(0.4,0,0.2,1)',
         }}>
           {expanded ? (
-            <img src="/logo-dark.svg" alt="AethoFlo" style={{ height: 40, width: 'auto' }} />
+            orgLogoUrl
+              ? <img src={orgLogoUrl} alt="Logo" style={{ height: 36, maxWidth: 140, objectFit: 'contain' }} />
+              : <img src="/logo-dark.svg" alt="AethoFlo" style={{ height: 40, width: 'auto' }} />
           ) : (
             <img src="/favicon.svg" alt="AethoFlo" style={{ height: 26, width: 26 }} />
           )}
