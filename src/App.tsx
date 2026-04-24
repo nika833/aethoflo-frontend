@@ -12,6 +12,7 @@ import EmbeddedLaunchPage from './pages/EmbeddedLaunchPage';
 import NotificationSettings from './pages/NotificationSettings';
 
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import OrgBranding from './pages/OrgBranding';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminDomains from './pages/AdminDomains';
 import AdminModules from './pages/AdminModules';
@@ -52,6 +53,8 @@ export default function App() {
           <Route path="roadmaps" element={<AdminRoadmaps />} />
           <Route path="assignments" element={<AdminAssignments />} />
           <Route path="exports" element={<AdminExports />} />
+          <Route path="settings" element={<NotificationSettings />} />
+          <Route path="branding" element={<OrgBranding />} />
         </Route>
 
         {/* Learner routes */}
@@ -63,13 +66,6 @@ export default function App() {
           <Route path="progress" element={<LearnerProgressPage />} />
           <Route path="library" element={<LearnerLibraryPage />} />
           <Route path="saved" element={<LearnerSavedPage />} />
-          <Route path="settings" element={<NotificationSettings />} />
-        </Route>
-
-        {/* Admin notification settings */}
-        <Route path="/admin" element={
-          <RequireAuth role="admin"><AppShell /></RequireAuth>
-        }>
           <Route path="settings" element={<NotificationSettings />} />
         </Route>
 

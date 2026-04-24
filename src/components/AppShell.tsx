@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../lib/authStore';
-import { domainsApi, moduleSkillsApi, roadmapsApi, orgApi } from '../lib/api';
+import { domainsApi, moduleSkillsApi, roadmapsApi, orgApi, OrgSettings } from '../lib/api';
 import api from '../lib/api';
 
 const ADMIN_NAV = [
@@ -11,6 +11,8 @@ const ADMIN_NAV = [
   { to: '/admin/roadmaps',    label: 'Roadmaps',       icon: '⟶' },
   { to: '/admin/assignments', label: 'Assignments',    icon: '◎' },
   { to: '/admin/exports',     label: 'Exports',        icon: '↓' },
+  { to: '/admin/settings',    label: 'Notifications',  icon: '◐' },
+  { to: '/admin/branding',    label: 'Branding',       icon: '⊙' },
 ];
 
 const LEARNER_NAV = [
@@ -19,8 +21,20 @@ const LEARNER_NAV = [
   { to: '/learner/library',  label: 'Library',     icon: '⊟' },
 ];
 
-const SIDEBAR_BG = '#5C3520';
+const DEFAULT_SIDEBAR_BG = '#5C3520';
+const DEFAULT_ACCENT_COLOR = '#C96B47';
 const BORDER_COLOR = 'rgba(255,255,255,0.08)';
+
+function hexToRgba(hex: string, alpha: number) {
+  try {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  } catch {
+    return `rgba(201,107,71,${alpha})`;
+  }
+}
 const ONBOARDING_KEY = 'aethoflo_onboarding_done';
 
 // ─── Onboarding Floater ───────────────────────────────────────────────────────
@@ -223,13 +237,26 @@ export default function AppShell() {
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
   const [showSetPassword, setShowSetPassword] = useState(false);
-  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
+  const [orgSettings, setOrgSettings] = useState<OrgSettings | null>(null);
   const nav = user?.role === 'admin' ? ADMIN_NAV : LEARNER_NAV;
   const expanded = hovered;
 
+  const applyOrgSettings = (s: OrgSettings) => {
+    setOrgSettings(s);
+  };
+
   useEffect(() => {
-    orgApi.settings().then((s) => { if (s.logo_url) setOrgLogoUrl(s.logo_url); }).catch(() => {});
+    orgApi.settings().then(applyOrgSettings).catch(() => {});
+
+    // Re-apply when branding page saves changes
+    const handler = () => { orgApi.settings().then(applyOrgSettings).catch(() => {}); };
+    window.addEventListener('org-settings-updated', handler);
+    return () => window.removeEventListener('org-settings-updated', handler);
   }, []);
+
+  const sidebarBg   = orgSettings?.primary_color ?? DEFAULT_SIDEBAR_BG;
+  const accentColor = orgSettings?.accent_color  ?? DEFAULT_ACCENT_COLOR;
+  const orgLogoUrl  = orgSettings?.logo_url ?? null;
 
   const handleLogout = () => {
     clearAuth();
@@ -254,7 +281,7 @@ export default function AppShell() {
         style={{
           position: 'fixed', top: 0, left: 0, zIndex: 200,
           width: expanded ? 220 : 60,
-          background: SIDEBAR_BG,
+          background: sidebarBg,
           borderRight: `1px solid ${BORDER_COLOR}`,
           display: 'flex', flexDirection: 'column',
           transition: 'width 200ms cubic-bezier(0.4,0,0.2,1)',
@@ -296,8 +323,8 @@ export default function AppShell() {
                 borderRadius: 'var(--radius-md)',
                 fontSize: 14,
                 fontWeight: 500,
-                color: isActive ? '#C96B47' : 'rgba(255,255,255,0.55)',
-                background: isActive ? 'rgba(201,107,71,0.14)' : 'transparent',
+                color: isActive ? accentColor : 'rgba(255,255,255,0.55)',
+                background: isActive ? hexToRgba(accentColor, 0.14) : 'transparent',
                 textDecoration: 'none',
                 transition: 'all var(--duration-fast)',
                 justifyContent: expanded ? 'flex-start' : 'center',

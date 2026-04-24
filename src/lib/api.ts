@@ -158,11 +158,20 @@ export const superAdminApi = {
     api.post(`/super-admin/orgs/${orgId}/impersonate`, { user_id }).then((r) => r.data as { url: string }),
 };
 
+export type OrgSettings = {
+  id: string; name: string; slug: string; plan: PlanName;
+  max_admins: number; max_learners: number;
+  logo_url: string | null;
+  primary_color: string | null;
+  accent_color: string | null;
+};
+
 export const orgApi = {
-  settings: () => api.get('/org/settings').then((r) => r.data as {
-    id: string; name: string; slug: string; plan: PlanName;
-    max_admins: number; max_learners: number; logo_url: string | null;
-  }),
+  settings: () => api.get('/org/settings').then((r) => r.data as OrgSettings),
+  updateSettings: (d: { logo_url?: string | null; primary_color?: string | null; accent_color?: string | null }) =>
+    api.patch('/org/settings', d).then((r) => r.data as OrgSettings),
+  logoPresign: (d: { filename: string; mime_type: string }) =>
+    api.post('/org/logo/presign', d).then((r) => r.data as { upload_url: string; public_url: string; s3_key: string }),
 };
 
 export const mediaApi = {
