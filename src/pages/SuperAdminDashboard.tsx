@@ -128,7 +128,7 @@ export default function SuperAdminDashboard() {
   const openEdit = (org: Org) => {
     setEditOrg(org);
     setEditLogo(org.logo_url ?? '');
-    setEditPlan(org.plan);
+    setEditPlan(org.plan ?? 'starter');
   };
 
   const handleSaveEdit = async () => {
@@ -155,8 +155,8 @@ export default function SuperAdminDashboard() {
     ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '—';
 
-  const seatLabel = (count: number, max: number) =>
-    max === -1 ? `${count} / ∞` : `${count} / ${max}`;
+  const seatLabel = (count: number, max: number | undefined | null) =>
+    max == null ? `${count}` : max === -1 ? `${count} / ∞` : `${count} / ${max}`;
 
   return (
     <div style={{ minHeight: '100vh', background: '#FAF5EF', fontFamily: "'Inter', sans-serif" }}>
@@ -451,7 +451,7 @@ export default function SuperAdminDashboard() {
               </thead>
               <tbody>
                 {orgs.map((org, i) => {
-                  const planColor = PLAN_COLORS[org.plan] ?? PLAN_COLORS.starter;
+                  const planColor = PLAN_COLORS[org.plan ?? 'starter'] ?? PLAN_COLORS.starter;
                   return (
                     <tr key={org.id} style={{ borderBottom: i < orgs.length - 1 ? '1px solid #F5F5F4' : 'none' }}>
                       <td style={{ padding: '14px 16px' }}>
