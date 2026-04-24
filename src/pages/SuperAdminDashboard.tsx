@@ -23,6 +23,10 @@ export default function SuperAdminDashboard() {
   const [newOrg, setNewOrg] = useState({ org_name: '', admin_name: '', admin_email: '' });
   const [createdLink, setCreatedLink] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [addAdminOrgId, setAddAdminOrgId] = useState<string | null>(null);
+  const [addAdminForm, setAddAdminForm] = useState({ admin_name: '', admin_email: '' });
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const [addAdminLink, setAddAdminLink] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -56,6 +60,20 @@ export default function SuperAdminDashboard() {
     await superAdminApi.updateOrg(org.id, { status: next });
     showToast(`${org.name} set to ${next}`);
     load();
+  };
+
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addAdminOrgId) return;
+    setAddingAdmin(true);
+    try {
+      const result = await superAdminApi.addAdmin(addAdminOrgId, addAdminForm);
+      setAddAdminLink(result.magic_link);
+      setAddAdminForm({ admin_name: '', admin_email: '' });
+      load();
+    } finally {
+      setAddingAdmin(false);
+    }
   };
 
   const resendInvite = async (org: Org) => {
@@ -173,6 +191,77 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
+        {/* Add admin modal */}
+        {addAdminOrgId && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              {addAdminLink ? (
+                <>
+                  <h2 style={{ fontSize: 20, fontWeight: 600, color: '#2A1810', marginTop: 0 }}>Admin added ✓</h2>
+                  <p style={{ color: '#57534E', fontSize: 14, marginBottom: 16 }}>
+                    A welcome email has been sent. Share this magic link if needed:
+                  </p>
+                  <div style={{ background: '#F5F5F4', borderRadius: 8, padding: '12px 14px', fontSize: 13, color: '#1C1917', wordBreak: 'break-all', marginBottom: 20 }}>
+                    {addAdminLink}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(addAdminLink); showToast('Copied!'); }}
+                      style={{ flex: 1, background: '#E87A4E', color: '#fff', border: 'none', padding: '10px 0', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}
+                    >
+                      Copy link
+                    </button>
+                    <button
+                      onClick={() => { setAddAdminOrgId(null); setAddAdminLink(null); }}
+                      style={{ flex: 1, background: '#F5F5F4', color: '#57534E', border: 'none', padding: '10px 0', borderRadius: 8, cursor: 'pointer' }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 style={{ fontSize: 20, fontWeight: 600, color: '#2A1810', marginTop: 0 }}>Add Admin</h2>
+                  <form onSubmit={handleAddAdmin}>
+                    {[
+                      { label: 'Admin name', key: 'admin_name', placeholder: 'Jane Smith' },
+                      { label: 'Admin email', key: 'admin_email', placeholder: 'jane@org.com' },
+                    ].map(({ label, key, placeholder }) => (
+                      <div key={key} style={{ marginBottom: 16 }}>
+                        <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#2A1810', marginBottom: 6 }}>{label}</label>
+                        <input
+                          type={key === 'admin_email' ? 'email' : 'text'}
+                          required
+                          placeholder={placeholder}
+                          value={addAdminForm[key as keyof typeof addAdminForm]}
+                          onChange={(e) => setAddAdminForm({ ...addAdminForm, [key]: e.target.value })}
+                          style={{ width: '100%', padding: '10px 12px', border: '1px solid #E7E5E4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                      <button
+                        type="submit"
+                        disabled={addingAdmin}
+                        style={{ flex: 1, background: '#E87A4E', color: '#fff', border: 'none', padding: '11px 0', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
+                      >
+                        {addingAdmin ? 'Adding…' : 'Add & send invite'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddAdminOrgId(null)}
+                        style={{ flex: 1, background: '#F5F5F4', color: '#57534E', border: 'none', padding: '11px 0', borderRadius: 8, cursor: 'pointer' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Orgs table */}
         {loading ? (
           <p style={{ color: '#78716C' }}>Loading…</p>
@@ -208,6 +297,12 @@ export default function SuperAdminDashboard() {
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => { setAddAdminOrgId(org.id); setAddAdminLink(null); setAddAdminForm({ admin_name: '', admin_email: '' }); }}
+                          style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #E7E5E4', background: '#fff', cursor: 'pointer', color: '#57534E' }}
+                        >
+                          + Admin
+                        </button>
                         <button
                           onClick={() => resendInvite(org)}
                           style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #E7E5E4', background: '#fff', cursor: 'pointer', color: '#57534E' }}

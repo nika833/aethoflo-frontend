@@ -139,6 +139,8 @@ export const superAdminApi = {
     api.patch(`/super-admin/orgs/${id}`, d).then((r) => r.data),
   resendInvite: (id: string) =>
     api.post(`/super-admin/orgs/${id}/resend-invite`).then((r) => r.data),
+  addAdmin: (orgId: string, d: { admin_name: string; admin_email: string }) =>
+    api.post(`/super-admin/orgs/${orgId}/admins`, d).then((r) => r.data),
 };
 
 export const mediaApi = {
