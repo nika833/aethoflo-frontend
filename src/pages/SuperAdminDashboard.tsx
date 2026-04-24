@@ -111,6 +111,9 @@ export default function SuperAdminDashboard() {
     try {
       const data = await superAdminApi.listMembers(org.id);
       setMembers(data);
+    } catch {
+      showToast('Could not load members — backend may still be deploying');
+      setLoginAsOrg(null);
     } finally {
       setLoadingMembers(false);
     }
