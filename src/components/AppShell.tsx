@@ -11,7 +11,6 @@ const ADMIN_NAV = [
   { to: '/admin/roadmaps',    label: 'Roadmaps',       icon: '⟶' },
   { to: '/admin/assignments', label: 'Assignments',    icon: '◎' },
   { to: '/admin/exports',     label: 'Exports',        icon: '↓' },
-  { to: '/admin/settings',    label: 'Notifications',  icon: '◐' },
   { to: '/admin/branding',    label: 'Branding',       icon: '⊙' },
 ];
 

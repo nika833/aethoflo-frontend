@@ -138,11 +138,7 @@ export default function SuperAdminDashboard() {
     if (!editOrg) return;
     setSaving(true);
     try {
-      const tier = PLAN_TIERS[editPlan];
-      await superAdminApi.updateOrg(editOrg.id, {
-        plan: editPlan,
-        logo_url: tier.white_label && editLogo.trim() ? editLogo.trim() : null,
-      });
+      await superAdminApi.updateOrg(editOrg.id, { plan: editPlan });
       showToast('Saved');
       setEditOrg(null);
       load();
@@ -399,29 +395,10 @@ export default function SuperAdminDashboard() {
                   })}
                 </select>
               </div>
-              {PLAN_TIERS[editPlan].white_label ? (
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#2A1810', marginBottom: 6 }}>
-                    Logo URL <span style={{ color: '#16A34A', fontWeight: 400 }}>✓ white-label included</span>
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="https://client.com/logo.png"
-                    value={editLogo}
-                    onChange={(e) => setEditLogo(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #E7E5E4', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }}
-                  />
-                  {editLogo && (
-                    <div style={{ marginTop: 10, padding: 10, background: '#F5F5F4', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <img src={editLogo} alt="Logo preview" style={{ height: 32, maxWidth: 120, objectFit: 'contain' }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      <span style={{ fontSize: 12, color: '#78716C' }}>Preview</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ marginBottom: 20, padding: '12px 14px', background: '#FFF7F3', borderRadius: 8, border: '1px solid #F0E8DF' }}>
-                  <p style={{ margin: 0, fontSize: 13, color: '#78716C' }}>
-                    🔒 White-label logo requires <strong>Core plan or above</strong>. Upgrade the plan to enable custom branding.
+              {PLAN_TIERS[editPlan].white_label && (
+                <div style={{ marginBottom: 20, padding: '12px 14px', background: '#F0FDF4', borderRadius: 8, border: '1px solid #BBF7D0' }}>
+                  <p style={{ margin: 0, fontSize: 13, color: '#166534' }}>
+                    ✓ White-label branding included — the org can upload their logo and set custom colors from their Branding settings.
                   </p>
                 </div>
               )}
