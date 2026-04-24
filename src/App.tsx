@@ -11,6 +11,7 @@ import SignupPage from './pages/SignupPage';
 import EmbeddedLaunchPage from './pages/EmbeddedLaunchPage';
 import NotificationSettings from './pages/NotificationSettings';
 
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminDomains from './pages/AdminDomains';
 import AdminModules from './pages/AdminModules';
@@ -27,6 +28,7 @@ import LearnerSavedPage from './pages/LearnerSavedPage';
 function RootRedirect() {
   const { user } = useAuthStore();
   if (!user) return <Navigate to="/login" replace />;
+  if (user.role === 'superadmin') return <Navigate to="/super-admin" replace />;
   return <Navigate to={user.role === 'admin' ? '/admin' : '/learner'} replace />;
 }
 
@@ -70,6 +72,11 @@ export default function App() {
         }>
           <Route path="settings" element={<NotificationSettings />} />
         </Route>
+
+        {/* Super admin */}
+        <Route path="/super-admin" element={
+          <RequireAuth role="superadmin"><SuperAdminDashboard /></RequireAuth>
+        } />
 
         {/* Magic link sign-in */}
         <Route path="/join/:token" element={<MagicLinkPage />} />

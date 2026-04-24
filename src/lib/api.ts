@@ -131,6 +131,16 @@ export const usersApi = {
   groups: () => api.get('/users/groups').then((r) => r.data as string[]),
 };
 
+export const superAdminApi = {
+  listOrgs: () => api.get('/super-admin/orgs').then((r) => r.data),
+  createOrg: (d: { org_name: string; admin_name: string; admin_email: string }) =>
+    api.post('/super-admin/orgs', d).then((r) => r.data),
+  updateOrg: (id: string, d: { name?: string; status?: 'active' | 'inactive' }) =>
+    api.patch(`/super-admin/orgs/${id}`, d).then((r) => r.data),
+  resendInvite: (id: string) =>
+    api.post(`/super-admin/orgs/${id}/resend-invite`).then((r) => r.data),
+};
+
 export const mediaApi = {
   presign: (d: { filename: string; mime_type: string; module_skill_id: string }) =>
     api.post('/media/presign', d).then((r) => r.data),

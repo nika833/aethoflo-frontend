@@ -4,7 +4,7 @@ export interface AuthUser {
   id: string;
   email: string;
   display_name: string;
-  role: 'admin' | 'learner';
+  role: 'admin' | 'learner' | 'superadmin';
   organization_id: string;
 }
 
