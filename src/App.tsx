@@ -52,7 +52,7 @@ export default function App() {
           <Route path="modules" element={<AdminModules />} />
           <Route path="roadmaps" element={<AdminRoadmaps />} />
           <Route path="assignments" element={<AdminAssignments />} />
-          <Route path="exports" element={<AdminExports />} />
+          <Route path="exports" element={<Navigate to="/admin/branding" replace />} />
           <Route path="settings" element={<NotificationSettings />} />
           <Route path="branding" element={<OrgBranding />} />
         </Route>

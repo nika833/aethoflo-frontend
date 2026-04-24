@@ -1,8 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { orgApi, OrgSettings, PLAN_TIERS, PlanName } from '../lib/api';
+import { orgApi, exportsApi, OrgSettings, PLAN_TIERS, PlanName } from '../lib/api';
 
 const DEFAULT_PRIMARY = '#5C3520';
 const DEFAULT_ACCENT  = '#C96B47';
+
+const EXPORTS = [
+  { id: 'learner_progress',    label: 'Learner progress by roadmap',  desc: 'All learners, roadmaps, modules, statuses, and timestamps.',                                        icon: '◈' },
+  { id: 'module_completion',   label: 'Module completion history',    desc: 'All completed modules with completion dates and learner notes.',                                     icon: '✓' },
+  { id: 'checklist_responses', label: 'Checklist responses',          desc: 'All submitted checklist answers with per-item values.',                                              icon: '⊟' },
+  { id: 'roadmap_assignments', label: 'Roadmap assignments',          desc: 'All learner-to-roadmap assignments with activation dates and trigger sources.',                      icon: '◎' },
+  { id: 'release_status',      label: 'Release status by learner',    desc: 'Calculated release dates per module per learner based on activation and release rules.',            icon: '⟶' },
+];
 
 function hexToRgba(hex: string, alpha: number) {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -80,6 +88,11 @@ export default function OrgBranding() {
   const [saved, setSaved]       = useState(false);
   const [saveError, setSaveError] = useState('');
 
+  // Export state
+  const [exportLoading, setExportLoading]         = useState<string | null>(null);
+  const [exportError, setExportError]             = useState('');
+  const [lastDownloaded, setLastDownloaded]       = useState<string | null>(null);
+
   useEffect(() => {
     orgApi.settings()
       .then((s) => {
@@ -117,6 +130,19 @@ export default function OrgBranding() {
       setUploadError('Upload failed. Please try again.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  // ─── Export download ────────────────────────────────────────────────────────
+  const handleDownload = async (id: string) => {
+    setExportLoading(id); setExportError(''); setLastDownloaded(null);
+    try {
+      await exportsApi.download(id);
+      setLastDownloaded(id);
+    } catch {
+      setExportError('Export failed. Please try again.');
+    } finally {
+      setExportLoading(null);
     }
   };
 
@@ -375,6 +401,74 @@ export default function OrgBranding() {
           Contact us to upgrade your organization.
         </div>
       )}
+
+      {/* ── Exports ───────────────────────────────────────────────────────── */}
+      <div style={{ marginTop: 40 }}>
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            Exports
+          </h2>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4, marginBottom: 0 }}>
+            Download learner and training data as CSV.
+          </p>
+        </div>
+
+        {exportError && (
+          <div style={{ marginBottom: 12, padding: '10px 14px', background: '#FEE2E2',
+            border: '1px solid #FECACA', borderRadius: 8, fontSize: 13, color: '#B91C1C' }}>
+            {exportError}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {EXPORTS.map((exp) => (
+            <div key={exp.id} style={{
+              background: '#fff', border: '1px solid var(--border)',
+              borderRadius: 12, padding: '16px 20px',
+              display: 'flex', alignItems: 'center', gap: 16,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+                background: 'var(--accent-light)', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                fontSize: 18, color: 'var(--accent)',
+              }}>
+                {exp.icon}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 2 }}>
+                  {exp.label}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{exp.desc}</div>
+              </div>
+              {lastDownloaded === exp.id && (
+                <span style={{ fontSize: 12, color: '#059669', flexShrink: 0 }}>Downloaded ✓</span>
+              )}
+              <button
+                className="btn btn-secondary btn-sm"
+                disabled={exportLoading === exp.id}
+                onClick={() => handleDownload(exp.id)}
+                style={{ flexShrink: 0 }}
+              >
+                {exportLoading === exp.id ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ animation: 'pulse-soft 1s ease infinite', display: 'inline-block' }}>•</span>
+                    Generating...
+                  </span>
+                ) : '↓ Download CSV'}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div style={{
+          marginTop: 16, padding: '12px 16px', background: 'var(--surface-2)',
+          borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)',
+          border: '1px solid var(--border-light)',
+        }}>
+          All exports are generated in real time and reflect current data.
+        </div>
+      </div>
     </div>
   );
 }

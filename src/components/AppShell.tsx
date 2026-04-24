@@ -10,8 +10,7 @@ const ADMIN_NAV = [
   { to: '/admin/modules',     label: 'Module Library', icon: '⊟' },
   { to: '/admin/roadmaps',    label: 'Roadmaps',       icon: '⟶' },
   { to: '/admin/assignments', label: 'Assignments',    icon: '◎' },
-  { to: '/admin/exports',     label: 'Exports',        icon: '↓' },
-  { to: '/admin/branding',    label: 'Branding',       icon: '⊙' },
+  { to: '/admin/branding',    label: 'Settings',       icon: '⊙' },
 ];
 
 const LEARNER_NAV = [
