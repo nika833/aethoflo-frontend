@@ -219,7 +219,7 @@ function SetPasswordModal({ onClose }: { onClose: () => void }) {
 // ─── AppShell ─────────────────────────────────────────────────────────────────
 
 export default function AppShell() {
-  const { user, clearAuth } = useAuthStore();
+  const { user, clearAuth, isImpersonating, clearImpersonation } = useAuthStore();
   const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
   const [showSetPassword, setShowSetPassword] = useState(false);
@@ -357,6 +357,30 @@ export default function AppShell() {
           <Outlet />
         </div>
       </main>
+
+      {/* Impersonation banner */}
+      {isImpersonating && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: '#E87A4E', color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
+          padding: '10px 20px', fontSize: 13, fontWeight: 500,
+        }}>
+          <span>👁 Viewing as <strong>{user?.display_name}</strong> ({user?.role}) — this is a support session</span>
+          <button
+            onClick={() => { clearImpersonation(); window.close(); }}
+            style={{
+              background: 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.4)',
+              color: '#fff', padding: '4px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            }}
+          >
+            Close tab
+          </button>
+        </div>
+      )}
+
+      {/* Push content down when banner is showing */}
+      {isImpersonating && <div style={{ height: 40 }} />}
 
       {/* Onboarding floater — admin only */}
       {user?.role === 'admin' && <OnboardingFloater />}

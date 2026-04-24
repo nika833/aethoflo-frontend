@@ -1,24 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { magicLinkApi } from '../lib/api';
 import { useAuthStore } from '../lib/authStore';
 import { Spinner } from '../components/ui';
 
 export default function MagicLinkPage() {
   const { token } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { setAuth } = useAuthStore();
+  const { setAuth, setImpersonationAuth } = useAuthStore();
   const [error, setError] = useState('');
+
+  const isImpersonating = searchParams.get('mode') === 'impersonate';
 
   useEffect(() => {
     if (!token) { setError('Invalid link.'); return; }
     magicLinkApi.redeem(token)
       .then(({ token: jwt, user }) => {
-        setAuth(
-          { id: user.id, email: user.email, display_name: user.display_name, role: user.role as 'admin' | 'learner', organization_id: user.org },
-          jwt
-        );
-        navigate(user.role === 'admin' ? '/admin' : '/learner', { replace: true });
+        const authUser = {
+          id: user.id,
+          email: user.email,
+          display_name: user.display_name,
+          role: user.role as 'admin' | 'learner' | 'superadmin',
+          organization_id: user.org,
+        };
+
+        if (isImpersonating) {
+          setImpersonationAuth(authUser, jwt);
+          navigate(user.role === 'admin' ? '/admin' : '/learner', { replace: true });
+        } else {
+          setAuth(authUser, jwt);
+          if (user.role === 'superadmin') navigate('/super-admin', { replace: true });
+          else navigate(user.role === 'admin' ? '/admin' : '/learner', { replace: true });
+        }
       })
       .catch((err) => {
         const msg = err?.response?.data?.error ?? 'This link has expired or is invalid.';
@@ -49,7 +63,9 @@ export default function MagicLinkPage() {
     }}>
       <div style={{ textAlign: 'center' }}>
         <Spinner size={32} />
-        <p style={{ marginTop: 16, color: '#57534E', fontSize: 15 }}>Signing you in…</p>
+        <p style={{ marginTop: 16, color: '#57534E', fontSize: 15 }}>
+          {isImpersonating ? 'Opening session…' : 'Signing you in…'}
+        </p>
       </div>
     </div>
   );

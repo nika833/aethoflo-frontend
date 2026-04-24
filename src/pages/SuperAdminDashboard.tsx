@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { superAdminApi, PLAN_TIERS, PlanName } from '../lib/api';
+type OrgMember = { id: string; display_name: string; email: string; role: string };
 import { useAuthStore } from '../lib/authStore';
 
 interface Org {
@@ -43,6 +44,9 @@ export default function SuperAdminDashboard() {
   const [editLogo, setEditLogo] = useState('');
   const [editPlan, setEditPlan] = useState<PlanName>('starter');
   const [saving, setSaving] = useState(false);
+  const [loginAsOrg, setLoginAsOrg] = useState<Org | null>(null);
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -99,6 +103,26 @@ export default function SuperAdminDashboard() {
     const result = await superAdminApi.resendInvite(org.id);
     await navigator.clipboard.writeText(result.magic_link);
     showToast('Invite link copied to clipboard');
+  };
+
+  const openLoginAs = async (org: Org) => {
+    setLoginAsOrg(org);
+    setLoadingMembers(true);
+    try {
+      const data = await superAdminApi.listMembers(org.id);
+      setMembers(data);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const handleImpersonate = async (orgId: string, userId: string) => {
+    try {
+      const { url } = await superAdminApi.impersonate(orgId, userId);
+      window.open(url, '_blank');
+    } catch {
+      showToast('Failed to generate session');
+    }
   };
 
   const openEdit = (org: Org) => {
@@ -302,6 +326,57 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
+        {/* Login As modal */}
+        {loginAsOrg && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 32, width: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ marginBottom: 20 }}>
+                <h2 style={{ fontSize: 20, fontWeight: 600, color: '#2A1810', margin: '0 0 4px' }}>Login as…</h2>
+                <p style={{ color: '#78716C', fontSize: 13, margin: 0 }}>{loginAsOrg.name} · opens in a new tab</p>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {loadingMembers ? (
+                  <p style={{ color: '#78716C', fontSize: 14 }}>Loading members…</p>
+                ) : members.length === 0 ? (
+                  <p style={{ color: '#A8A29E', fontSize: 14 }}>No active members in this org.</p>
+                ) : (
+                  ['admin', 'learner'].map((role) => {
+                    const group = members.filter((m) => m.role === role);
+                    if (!group.length) return null;
+                    return (
+                      <div key={role} style={{ marginBottom: 20 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#A8A29E', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                          {role === 'admin' ? 'Admins' : 'Learners'}
+                        </div>
+                        {group.map((m) => (
+                          <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 8, border: '1px solid #F5F5F4', marginBottom: 6, background: '#FAFAFA' }}>
+                            <div>
+                              <div style={{ fontWeight: 500, fontSize: 14, color: '#1C1917' }}>{m.display_name}</div>
+                              <div style={{ fontSize: 12, color: '#A8A29E' }}>{m.email}</div>
+                            </div>
+                            <button
+                              onClick={() => handleImpersonate(loginAsOrg.id, m.id)}
+                              style={{ background: '#E87A4E', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}
+                            >
+                              Login as →
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div style={{ marginTop: 16 }}>
+                <button onClick={() => { setLoginAsOrg(null); setMembers([]); }}
+                  style={{ width: '100%', background: '#F5F5F4', color: '#57534E', border: 'none', padding: '11px 0', borderRadius: 8, cursor: 'pointer', fontWeight: 500 }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Edit org modal (plan + logo) */}
         {editOrg && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
@@ -410,6 +485,10 @@ export default function SuperAdminDashboard() {
                       </td>
                       <td style={{ padding: '14px 16px' }}>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button onClick={() => openLoginAs(org)}
+                            style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #E87A4E', background: '#FFF7F3', cursor: 'pointer', color: '#E87A4E', fontWeight: 600 }}>
+                            Login as
+                          </button>
                           <button onClick={() => openEdit(org)}
                             style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #E7E5E4', background: '#fff', cursor: 'pointer', color: '#57534E' }}>
                             Plan / Logo

@@ -6,7 +6,8 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('aethoflo_token');
+  // Prefer impersonation token (sessionStorage) over regular token (localStorage)
+  const token = sessionStorage.getItem('aethoflo_imp_token') ?? localStorage.getItem('aethoflo_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -151,6 +152,10 @@ export const superAdminApi = {
     api.post(`/super-admin/orgs/${id}/resend-invite`).then((r) => r.data),
   addAdmin: (orgId: string, d: { admin_name: string; admin_email: string }) =>
     api.post(`/super-admin/orgs/${orgId}/admins`, d).then((r) => r.data),
+  listMembers: (orgId: string) =>
+    api.get(`/super-admin/orgs/${orgId}/members`).then((r) => r.data as { id: string; display_name: string; email: string; role: string }[]),
+  impersonate: (orgId: string, user_id: string) =>
+    api.post(`/super-admin/orgs/${orgId}/impersonate`, { user_id }).then((r) => r.data as { url: string }),
 };
 
 export const orgApi = {
